@@ -63,8 +63,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
     // try to fetch the previous one
     let mut hasher = DefaultHasher::new();
     hasher.write("BackendStatus".as_bytes());
-    let backend_hash = hasher.finish() as usize;
-    let mut status_storage_index = backend_hash % kc.backs.len();
+    let backend_hash = hasher.finish() as usize % kc.backs.len();
+    let mut status_storage_index = backend_hash;
     while !status_table[status_storage_index].status {
         status_storage_index = (status_storage_index + 1) % kc.backs.len();
     }
@@ -218,7 +218,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             Err(e) => {return Box::new(TribblerError::Unknown(e.to_string()));}
                         }
                     }
-                    time::sleep(time::Duration::from_secs(5)).await;
+                    time::sleep(time::Duration::from_secs(3)).await;
                 }
             } => {}
         _ = async {
