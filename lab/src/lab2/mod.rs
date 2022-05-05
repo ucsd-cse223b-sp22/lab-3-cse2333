@@ -170,6 +170,7 @@
 mod client;
 mod lab;
 mod server;
+mod utils;
 mod wrapper;
 pub use crate::lab2::lab::new_bin_client;
 pub use crate::lab2::lab::new_front;
