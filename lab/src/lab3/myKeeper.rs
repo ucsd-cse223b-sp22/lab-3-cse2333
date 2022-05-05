@@ -33,7 +33,7 @@ impl KeeperWork for KeeperServer {
             .storage
             .set(&KeyValue {
                 key: "index".to_string(),
-                value: request_inner.index.to_string(),
+                value: request_inner.index.to_string().clone(),
             })
             .await;
         match result {
@@ -66,7 +66,7 @@ impl KeeperWork for KeeperServer {
             })
             .await;
         match result {
-            Ok(value) => Ok(Response::new(Bool { value: value })),
+            Ok(value) => Ok(Response::new(Bool { value })),
             Err(_) => Err(Status::invalid_argument("leader_id failed")),
         }
     }
@@ -127,7 +127,7 @@ impl KeeperClient for Keeper {
                 }
             }
         }
-        return 0;
+        return -1;
     }
 
     async fn select_leader(&self) -> i64 {
@@ -141,28 +141,28 @@ impl KeeperClient for Keeper {
                     Ok(value) => {
                         leaders.push(value.into_inner().index);
                     }
-                    Err(_) => {
-                        // the get leader returns error
-                        println!("the {} get_index goes wrong", addr_http.to_string());
-                        ();
-                    }
+                    Err(_) => {}
                 },
-                Err(e) => {
+                Err(_e) => {
                     // it could not connect to this client, just ask next
-
-                    println!("the {} connect goes wrong", addr_http.to_string());
-                    println!("the reason is {:}", e);
+                    // println!("the {} connect goes wrong", addr_http.to_string());
+                    // println!("the reason is {:?}", e);
                     ();
                 }
             }
         }
+        println!("current candicates are {:?}", &leaders);
         return *leaders.iter().min().unwrap();
     }
 
     async fn keeper_heart_beat(&self, id: i64, primary_id: i64) -> TribResult<Bool> {
         let mut addr_http = "http://".to_string();
-        addr_http.push_str(self.keepers.get(id as usize).unwrap());
-        println!("{} sends the hearbeat to {}", addr_http, primary_id);
+        addr_http.push_str(self.keepers.get(primary_id as usize).unwrap());
+        println!(
+            "{} sends the hearbeat to {}",
+            self.keepers.get(id as usize).unwrap(),
+            primary_id
+        );
         let client = KeeperWorkClient::connect(addr_http.to_string()).await;
         match client {
             Ok(_) => Ok(Bool { value: true }),

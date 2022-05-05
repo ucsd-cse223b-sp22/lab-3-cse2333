@@ -18,7 +18,7 @@ use tribbler::{config::KeeperConfig, err::TribResult, storage::BinStorage};
 /// underlying storage system.
 #[allow(unused_variables)]
 pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage>> {
-    Ok(Box::new(BinStorageClient { backs: backs }))
+    Ok(Box::new(BinStorageClient { backs }))
 }
 
 /// this async function accepts a [KeeperConfig] that should be used to start
@@ -29,14 +29,6 @@ pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage
 /// started.
 #[allow(unused_variables)]
 pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
-    match kc.ready {
-        // send a true over the ready channel when the service is ready (when ready is not None),
-        Some(channel) => {
-            channel.send(true).unwrap();
-        }
-        None => (),
-    }
-
     let mut addr_http = "http://".to_string();
     addr_http.push_str(kc.addrs.get(kc.this).unwrap());
 
@@ -80,8 +72,13 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                         Err(_) => (),
                     };
                     match c.set_index(Index{index: (kc.this as i64) }).await{
-                        Ok(_) => (),
-                        Err(_) => (),
+                        Ok(_) => {
+                            println!("{} sets the index is {}", addr_http, kc.this);
+                        },
+                        Err(e) => {
+                            println!("{} set index goes wrong", addr_http);
+                            println!("{:?}", e);
+                        },
                     };
                 }
                 Err(e) => {
@@ -89,9 +86,16 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 }
             }
             println!("the {} keep client check_leader", addr_http);
-
+            match kc.ready {
+                // send a true over the ready channel when the service is ready (when ready is not None),
+                Some(channel) => {
+                    channel.send(true).unwrap();
+                }
+                None => (),
+            }
             // just go online
             let res = keeper.check_leader().await;
+            println!("the current leader is {}",res);
             if res > 0 {
                 println!("{} finds there is a leader", addr_http);
                 // start heartbeat
@@ -110,11 +114,24 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                     }
                 }
             }
+
             loop {
                 // start selecting leader
                 let leader_id = keeper.select_leader().await;
                 println!("the {} keep client is not the leader", addr_http);
-
+                let client = KeeperWorkClient::connect(addr_http.to_string()).await;
+                match client {
+                    Ok(value) => {
+                        let mut c = value;
+                        match c.set_leader(Leader{ leader_id: leader_id }).await {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        };
+                    },
+                    Err(e) => {
+                        ();
+                    }
+                }
                 // if this keeper is not the leader,
                 // block it in a hear_beat
                 if leader_id != (kc.this as i64) {
@@ -130,6 +147,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                 time::sleep(time::Duration::from_secs(1)).await;
                             }
                             Err(e) => {
+                                println!("{} is dead", leader_id);
                                 primary_alive = false;
                             }
                         }
@@ -137,7 +155,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 } else {
                     println!("the {} keep client is the leader", addr_http);
                     loop{
-
+                        time::sleep(time::Duration::from_secs(1)).await;
+                        println!("{} do leader's work", addr_http);
                     }
                 // if this keeper is the leader,
                 // do clock sync and data migration
@@ -148,24 +167,13 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
             }
 
         } => {}
-        _ = async {
-            //the shutdown thread
+        _ = async {            //the shutdown thread
             if let Some(mut rx) = kc.shutdown {
                 rx.recv().await;
             } else {
                 let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
                 rx.recv().await;
             }
-            // if kc.this == 0 {
-            //     let i = 1000000000;
-            //     let mut j = 0;
-            //     while j < i {
-            //         j += 1;
-            //     }
-            // } else {
-            //     let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
-            //     rx.recv().await;
-            // }
         } => {}
     }
     return Ok(());
