@@ -26,6 +26,7 @@ pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage
     Ok(Box::new(BinStorageClient { backs: backs }))
 }
 
+// TODO: migration interrupt, keeper redo log
 /// this async function accepts a [KeeperConfig] that should be used to start
 /// a new keeper server on the address given in the config.
 ///
@@ -81,6 +82,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 serde_json::from_str::<Vec<StatusTableEntry>>(&value.into_inner().value).unwrap();
         }
         Err(e) => {
+            // TODO: store into replica
             if e.message().eq("No key provided") {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
                 status_client
@@ -186,8 +188,9 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
 
 // Migrate data from src node to dest node
 // Initial order: start -> dest -> src
-// Range: (start, dest]
+// Range: (start, dest] or (start, src]
 // TODO: if dest > src?
+// TODO: error catching?
 #[allow(unused_variables)]
 pub async fn data_migration(
     start: usize,
@@ -211,6 +214,7 @@ pub async fn data_migration(
         let mut hasher = DefaultHasher::new();
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
+        // TODO: check different case
         if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
             d.set(KeyValue {
                 key: each_key.to_string(),
@@ -230,10 +234,26 @@ pub async fn data_migration(
         .into_inner()
         .list;
     for each_key in all_list_keys {
+        // TODO: if each_key exists in dest, remove all entries
         let mut hasher = DefaultHasher::new();
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
         if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
+            // remove old entries
+            let old_records = d
+                .list_get(Key {
+                    key: each_key.to_string(),
+                })
+                .await?
+                .into_inner()
+                .list;
+            for entry in old_records {
+                d.list_remove(KeyValue {
+                    key: each_key.to_string(),
+                    value: entry,
+                })
+                .await?;
+            }
             // append new records
             let records = s
                 .list_get(Key {
