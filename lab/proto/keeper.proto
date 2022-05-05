@@ -5,3 +5,24 @@ syntax = "proto3";
 package keeper;
 
 // Add your message and service definitions below this line
+message Bool {
+    bool value = 1;
+  }
+
+message Clock {
+    uint64 timestamp = 1;
+}
+
+message Leader {
+    uint64 leader_id = 1;
+}
+
+message Empty {
+}
+
+service KeeperWork {
+    rpc getClock(Empty) returns (Clock);
+    rpc setClock(Clock) returns (Bool);
+    rpc getLeader(Empty) returns (Leader);
+    rpc setLeader(Leader) returns (Bool);
+}

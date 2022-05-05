@@ -1,21 +1,11 @@
-use std::net::ToSocketAddrs;
-
-#[allow(unused_variables)]
 use super::server::FrontServer;
-use crate::keeper::keeper_work_client::KeeperWorkClient;
-use crate::keeper::keeper_work_server::KeeperWorkServer;
-use crate::keeper::Leader;
 use crate::lab2::client::BinStorageClient;
-use tonic::{transport::Server, Request, Response, Status};
-
-use crate::lab3::myKeeper::{Keeper, KeeperClient, KeeperServer};
 use tokio::{select, time};
 use tribbler::err::TribblerError;
 use tribbler::rpc::Clock;
-use tribbler::storage::MemStorage;
 use tribbler::{
     config::KeeperConfig, err::TribResult, rpc::trib_storage_client::TribStorageClient,
-    storage::BinStorage,
+    storage::BinStorage, trib::Server,
 };
 
 /// This function accepts a list of backend addresses, and returns a
@@ -42,57 +32,10 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
         None => (),
     }
 
-    let mut addr_http = "http://".to_string();
-    addr_http.push_str(kc.addrs.get(kc.this).unwrap());
+    let mut clock: u64 = 0;
 
     select! {
         _ =  async {
-            // the server thread
-                // let server starts to work
-                let server = KeeperServer {
-                    storage: Box::new(MemStorage::new()),
-                };
-                let keep_server = KeeperWorkServer::new(server);
-                let addr = addr_http.to_socket_addrs().unwrap().next();
-
-                let res = match addr {
-                    Some(value) => {
-                        Server::builder()
-                            .add_service(keep_server)
-                            .serve(value)
-                            .await;
-                    }
-                    None => (),
-                };
-        } => {}
-        _ =  async {
-            // time::sleep(time::Duration::from_secs(1)).await;
-            // the client thread
-            let keeper = Keeper {
-                keepers: kc.addrs.clone(),
-                backs: kc.backs.clone(),
-            };
-
-            let client = KeeperWorkClient::connect(addr_http.to_string()).await;
-            // connect to itself and set an empty leader id
-            match client {
-                Ok(value) => {
-                    let mut c = value;
-                    c.set_leader(Leader{ leader_id: 0 }).await;
-                }
-                Err(e) => {
-                    ();
-                }
-            }
-
-            let res = keeper.check_leader();
-
-
-        } => {}
-        _ =  async {
-            let mut clock: u64 = 0;
-
-
                 loop {
                     let mut clocks = Vec::new();
                     for addr in kc.backs.iter() {
