@@ -66,8 +66,9 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 };
         } => {}
         _ =  async {
-            // time::sleep(time::Duration::from_secs(1)).await;
             // the client thread
+            // time::sleep(time::Duration::from_secs(1)).await;
+
             let keeper = Keeper {
                 keepers: kc.addrs.clone(),
                 backs: kc.backs.clone(),
@@ -85,51 +86,27 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 }
             }
 
-            let res = keeper.check_leader();
+            let res = keeper.check_leader().await;
+            if res > 0 {
+                // start heartbeat
+                let mut primary_alive = true;
+                while primary_alive {
+                    let res = keeper.check_leader().await;
+                }
+            } else{
+                // start select leader
+            }
+
+            // if this keeper is not the leader,
+            // block it in a hear_beat
+
+            // if this keeper is the leader,
+            // do clock sync and data migration
 
 
         } => {}
-        _ =  async {
-            let mut clock: u64 = 0;
-
-
-                loop {
-                    let mut clocks = Vec::new();
-                    for addr in kc.backs.iter() {
-                        let mut addr_http = "http://".to_string();
-                        addr_http.push_str(addr);
-                        let client = TribStorageClient::connect(addr_http.to_string()).await;
-                        match client {
-                            Ok(value) => {
-                                let mut c = value;
-                                match c.clock(Clock { timestamp: clock }).await {
-                                    Ok(v0) => {
-                                        clocks.push(v0.into_inner().timestamp);
-                                    }
-                                    Err(e) => {
-                                        return Box::new(TribblerError::Unknown(e.to_string()));
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                return Box::new(TribblerError::Unknown(e.to_string()));
-                            }
-                        }
-                    }
-                    clock = *clocks.iter().max().unwrap();
-                    // println!("{}", clock);
-                    for addr in kc.backs.iter() {
-                        let mut addr_http = "http://".to_string();
-                        addr_http.push_str(addr);
-                        match TribStorageClient::connect(addr_http.to_string()).await {
-                            Ok(mut c) => {let _ = c.clock(Clock { timestamp: clock });}
-                            Err(e) => {return Box::new(TribblerError::Unknown(e.to_string()));}
-                        }
-                    }
-                    time::sleep(time::Duration::from_secs(1)).await;
-                }
-            } => {}
         _ = async {
+            // the shutdown thread
             if let Some(mut rx) = kc.shutdown {
                 rx.recv().await;
             } else {
