@@ -1,34 +1,74 @@
 use crate::keeper::keeper_work_client::KeeperWorkClient;
 use crate::keeper::keeper_work_server::KeeperWork;
-use crate::keeper::{Bool, Clock, Empty, Leader};
+use crate::keeper::{Bool, Empty, Index, Leader};
 use async_trait::async_trait;
-use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
-use tribbler::config::KeeperConfig;
-use tribbler::err::TribResult;
-use tribbler::storage::Storage;
+use tribbler::err::{TribResult, TribblerError};
+use tribbler::storage::{KeyValue, Storage};
 
 pub struct KeeperServer {
     pub storage: Box<dyn Storage>,
-    // pub clock: RwLock<u64>,
+    // pub clock: RwLock<i64>,
 }
 
 #[async_trait]
 impl KeeperWork for KeeperServer {
-    async fn get_clock(&self, request: Request<Empty>) -> Result<Response<Clock>, Status> {
-        todo!();
+    async fn get_index(&self, _: Request<Empty>) -> Result<Response<Index>, Status> {
+        let result = self.storage.get("index").await;
+        match result {
+            Ok(value) => match value {
+                Some(v) => Ok(Response::new(Index {
+                    index: v.parse::<i64>().unwrap(),
+                })),
+                None => Err(Status::invalid_argument("No key provided")),
+            },
+            //err is maybe it doesn't have "index" key
+            Err(_) => Err(Status::invalid_argument("index doesn't exist")),
+        }
     }
 
-    async fn set_clock(&self, request: Request<Clock>) -> Result<Response<Bool>, Status> {
-        todo!();
+    async fn set_index(&self, request: Request<Index>) -> Result<Response<Bool>, Status> {
+        let request_inner = request.into_inner();
+        let result = self
+            .storage
+            .set(&KeyValue {
+                key: "index".to_string(),
+                value: request_inner.index.to_string(),
+            })
+            .await;
+        match result {
+            Ok(value) => Ok(Response::new(Bool { value: value })),
+            Err(_) => Err(Status::invalid_argument("set_index failed")),
+        }
     }
 
-    async fn get_leader(&self, request: Request<Empty>) -> Result<Response<Leader>, Status> {
-        todo!();
+    async fn get_leader(&self, _: Request<Empty>) -> Result<Response<Leader>, Status> {
+        let result = self.storage.get("leader_id").await;
+        match result {
+            Ok(value) => match value {
+                Some(v) => Ok(Response::new(Leader {
+                    leader_id: v.parse::<i64>().unwrap(),
+                })),
+                None => Err(Status::invalid_argument("No key provided")),
+            },
+            //err is maybe it doesn't have "index" key
+            Err(_) => Err(Status::invalid_argument("leader_id doesn't exist")),
+        }
     }
 
     async fn set_leader(&self, request: Request<Leader>) -> Result<Response<Bool>, Status> {
-        todo!();
+        let request_inner = request.into_inner();
+        let result = self
+            .storage
+            .set(&KeyValue {
+                key: "leader_id".to_string(),
+                value: request_inner.leader_id.to_string(),
+            })
+            .await;
+        match result {
+            Ok(value) => Ok(Response::new(Bool { value: value })),
+            Err(_) => Err(Status::invalid_argument("leader_id failed")),
+        }
     }
 }
 
@@ -39,21 +79,19 @@ pub trait KeeperClient: Send + Sync {
     // ask current leader from other keepers,
     // if found one, just return one
     // if result is 0, do the select_leader()
-    async fn check_leader(&self) -> u64;
+    async fn check_leader(&self) -> i64;
     // ask incarnation id of all other keepers,
     // then return the minimum one as the leader
-    async fn select_leader(&self) -> u64;
+    async fn select_leader(&self) -> i64;
     // heart beat the primary id,
     // if failed, means primary goes down, start selecting leader
     // if success, continue loop block itself
-    async fn keeper_heart_beat(&self, primary_id: u64) -> TribResult<Bool>;
-    // one of the keeper jobs: sync clock values of all backends
-    async fn clock_sync(&self, clock: &str) -> TribResult<Bool>;
+    async fn keeper_heart_beat(&self, id: i64, primary_id: i64) -> TribResult<Bool>;
 
-    // the heart beat to every backends
-    async fn backend_heart_beat(&self, id: u64) -> TribResult<Bool>;
-    // from one replica to a new replica
-    async fn data_migration(&self, src_id: u64, dst_id: u64) -> TribResult<Bool>;
+    // // the heart beat to every backends
+    // async fn backend_heart_beat(&self, id: i64) -> TribResult<Bool>;
+    // // from one replica to a new replica
+    // async fn data_migration(&self, src_id: i64, dst_id: i64) -> TribResult<Bool>;
 
     // ? when a backend back online, how to do that
 }
@@ -65,24 +103,25 @@ pub struct Keeper {
 
 #[async_trait]
 impl KeeperClient for Keeper {
-    async fn check_leader(&self) -> u64 {
-        for elem in self.keepers {
+    async fn check_leader(&self) -> i64 {
+        for elem in &self.keepers {
             let mut addr_http = "http://".to_string();
             addr_http.push_str(&elem);
             let client = KeeperWorkClient::connect(addr_http.to_string()).await;
             match client {
-                Ok(value) => match value.get_leader(Empty {}).await {
+                Ok(mut value) => match value.get_leader(Empty {}).await {
                     Ok(value) => {
-                        if value > 0 {
-                            return value;
+                        let check = value.into_inner().leader_id;
+                        if check > 0 {
+                            return check;
                         }
                     }
-                    Err(e) => {
+                    Err(_) => {
                         // the get leader returns error
                         ();
                     }
                 },
-                Err(e) => {
+                Err(_) => {
                     // it could not connect to this client, just ask next
                     ();
                 }
@@ -91,30 +130,60 @@ impl KeeperClient for Keeper {
         return 0;
     }
 
-    async fn select_leader(&self) -> u64 {
-        todo!();
+    async fn select_leader(&self) -> i64 {
+        let mut leaders = Vec::new();
+        for elem in &self.keepers {
+            let mut addr_http = "http://".to_string();
+            addr_http.push_str(&elem);
+            let client = KeeperWorkClient::connect(addr_http.to_string()).await;
+            match client {
+                Ok(mut value) => match value.get_index(Empty {}).await {
+                    Ok(value) => {
+                        leaders.push(value.into_inner().index);
+                    }
+                    Err(_) => {
+                        // the get leader returns error
+                        println!("the {} get_index goes wrong", addr_http.to_string());
+                        ();
+                    }
+                },
+                Err(e) => {
+                    // it could not connect to this client, just ask next
+
+                    println!("the {} connect goes wrong", addr_http.to_string());
+                    println!("the reason is {:}", e);
+                    ();
+                }
+            }
+        }
+        return *leaders.iter().min().unwrap();
     }
 
-    async fn keeper_heart_beat(&self, primary_id: u64) -> TribResult<Bool> {
-        todo!();
-    }
-
-    async fn clock_sync(&self, clock: &str) -> TribResult<Bool> {
-        //
-        todo!();
+    async fn keeper_heart_beat(&self, id: i64, primary_id: i64) -> TribResult<Bool> {
+        let mut addr_http = "http://".to_string();
+        addr_http.push_str(self.keepers.get(id as usize).unwrap());
+        println!("{} sends the hearbeat to {}", addr_http, primary_id);
+        let client = KeeperWorkClient::connect(addr_http.to_string()).await;
+        match client {
+            Ok(_) => Ok(Bool { value: true }),
+            Err(e) => {
+                return Err(Box::new(TribblerError::Unknown(e.to_string())));
+            }
+        }
     }
 
     // the heart beat to every backends
-    async fn backend_heart_beat(&self, id: u64) -> TribResult<Bool> {
-        todo!();
-    }
+    // check a specific backend is still alive
+    // async fn backend_heart_beat(&self, id: i64) -> TribResult<Bool> {
+    //     todo!();
+    // }
 
-    // from one replica to a new replica
-    async fn data_migration(&self, src_id: u64, dst_id: u64) -> TribResult<Bool> {
-        todo!();
-    }
+    // // from one replica to a new replica
+    // async fn data_migration(&self, src_id: i64, dst_id: i64) -> TribResult<Bool> {
+    //     todo!();
+    // }
 
-    // async fn client(&self, id: u64) -> TribResult<KeeperWorkClient<Channel>> {
+    // async fn client(&self, id: i64) -> TribResult<KeeperWorkClient<Channel>> {
     //     Ok(KeeperWorkClient::connect(self.keepers.get(id).clone()))
     // }
 }

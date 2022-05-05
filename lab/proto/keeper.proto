@@ -9,20 +9,21 @@ message Bool {
     bool value = 1;
   }
 
-message Clock {
-    uint64 timestamp = 1;
-}
 
 message Leader {
-    uint64 leader_id = 1;
+    int64 leader_id = 1;
+}
+
+message Index {
+    int64 index = 1;
 }
 
 message Empty {
 }
 
 service KeeperWork {
-    rpc getClock(Empty) returns (Clock);
-    rpc setClock(Clock) returns (Bool);
+    rpc getIndex(Empty) returns (Index);
+    rpc setIndex(Index) returns (Bool);
     rpc getLeader(Empty) returns (Leader);
     rpc setLeader(Leader) returns (Bool);
 }

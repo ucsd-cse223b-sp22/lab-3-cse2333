@@ -4,19 +4,14 @@ use std::net::ToSocketAddrs;
 use super::server::FrontServer;
 use crate::keeper::keeper_work_client::KeeperWorkClient;
 use crate::keeper::keeper_work_server::KeeperWorkServer;
-use crate::keeper::Leader;
+use crate::keeper::{Index, Leader};
 use crate::lab2::client::BinStorageClient;
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::Server;
 
 use crate::lab3::myKeeper::{Keeper, KeeperClient, KeeperServer};
 use tokio::{select, time};
-use tribbler::err::TribblerError;
-use tribbler::rpc::Clock;
 use tribbler::storage::MemStorage;
-use tribbler::{
-    config::KeeperConfig, err::TribResult, rpc::trib_storage_client::TribStorageClient,
-    storage::BinStorage,
-};
+use tribbler::{config::KeeperConfig, err::TribResult, storage::BinStorage};
 
 /// This function accepts a list of backend addresses, and returns a
 /// type which should implement the [BinStorage] trait to access the
@@ -47,13 +42,14 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
 
     select! {
         _ =  async {
+            println!("the {} keep server starts", addr_http);
             // the server thread
                 // let server starts to work
                 let server = KeeperServer {
                     storage: Box::new(MemStorage::new()),
                 };
                 let keep_server = KeeperWorkServer::new(server);
-                let addr = addr_http.to_socket_addrs().unwrap().next();
+                let addr = kc.addrs.get(kc.this).unwrap().to_socket_addrs().unwrap().next();
 
                 let res = match addr {
                     Some(value) => {
@@ -67,8 +63,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
         } => {}
         _ =  async {
             // the client thread
-            // time::sleep(time::Duration::from_secs(1)).await;
-
+            time::sleep(time::Duration::from_secs(1)).await;
+            println!("the {} keep client starts", addr_http);
             let keeper = Keeper {
                 keepers: kc.addrs.clone(),
                 backs: kc.backs.clone(),
@@ -79,40 +75,97 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
             match client {
                 Ok(value) => {
                     let mut c = value;
-                    c.set_leader(Leader{ leader_id: 0 }).await;
+                    match c.set_leader(Leader{ leader_id: -1 }).await {
+                        Ok(_) => (),
+                        Err(_) => (),
+                    };
+                    match c.set_index(Index{index: (kc.this as i64) }).await{
+                        Ok(_) => (),
+                        Err(_) => (),
+                    };
                 }
                 Err(e) => {
                     ();
                 }
             }
+            println!("the {} keep client check_leader", addr_http);
 
+            // just go online
             let res = keeper.check_leader().await;
             if res > 0 {
+                println!("{} finds there is a leader", addr_http);
                 // start heartbeat
                 let mut primary_alive = true;
                 while primary_alive {
-                    let res = keeper.check_leader().await;
+                    // send heart beat to the leader of current view
+                    let res = keeper.keeper_heart_beat(kc.this as i64, res).await;
+                    match res {
+                        Ok(value) => {
+                            // the primary alive wait 1 sec
+                            time::sleep(time::Duration::from_secs(1)).await;
+                        }
+                        Err(e) => {
+                            primary_alive = false;
+                        }
+                    }
                 }
-            } else{
-                // start select leader
             }
+            loop {
+                // start selecting leader
+                let leader_id = keeper.select_leader().await;
+                println!("the {} keep client is not the leader", addr_http);
 
-            // if this keeper is not the leader,
-            // block it in a hear_beat
+                // if this keeper is not the leader,
+                // block it in a hear_beat
+                if leader_id != (kc.this as i64) {
+                    println!("the {} keep client is not the leader", addr_http);
+                    // start heartbeat
+                    let mut primary_alive = true;
+                    while primary_alive {
+                        // send heart beat to the leader of current view
+                        let res = keeper.keeper_heart_beat(kc.this as i64, leader_id).await;
+                        match res {
+                            Ok(value) => {
+                                // the primary alive wait 1 sec
+                                time::sleep(time::Duration::from_secs(1)).await;
+                            }
+                            Err(e) => {
+                                primary_alive = false;
+                            }
+                        }
+                    }
+                } else {
+                    println!("the {} keep client is the leader", addr_http);
+                    loop{
 
-            // if this keeper is the leader,
-            // do clock sync and data migration
+                    }
+                // if this keeper is the leader,
+                // do clock sync and data migration
+                    continue;
 
+                }
+
+            }
 
         } => {}
         _ = async {
-            // the shutdown thread
+            //the shutdown thread
             if let Some(mut rx) = kc.shutdown {
                 rx.recv().await;
             } else {
                 let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
                 rx.recv().await;
             }
+            // if kc.this == 0 {
+            //     let i = 1000000000;
+            //     let mut j = 0;
+            //     while j < i {
+            //         j += 1;
+            //     }
+            // } else {
+            //     let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
+            //     rx.recv().await;
+            // }
         } => {}
     }
     return Ok(());
@@ -130,7 +183,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
 #[allow(unused_variables)]
 pub async fn new_front(
     bin_storage: Box<dyn BinStorage>,
-) -> TribResult<Box<dyn Server + Send + Sync>> {
+) -> TribResult<Box<dyn tribbler::trib::Server + Send + Sync>> {
     Ok(Box::new(FrontServer {
         bin_storage: bin_storage,
     }))
