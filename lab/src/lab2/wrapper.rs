@@ -94,7 +94,7 @@ impl KeyList for StorageClientWrapper {
             })
             .await?;
         let res2 = self
-            .storage_client_primary
+            .storage_client_backup
             .list_append(&KeyValue {
                 key: key_name.to_string(),
                 value: kv.value.to_string(),
@@ -121,7 +121,7 @@ impl KeyList for StorageClientWrapper {
             })
             .await?;
         let _res2 = self
-            .storage_client_primary
+            .storage_client_backup
             .list_remove(&KeyValue {
                 key: key_name.to_string(),
                 value: kv.value.to_string(),
@@ -154,6 +154,7 @@ impl KeyList for StorageClientWrapper {
 
 #[async_trait]
 impl Storage for StorageClientWrapper {
+    // todo: return 2 values reparately !!!
     async fn clock(&self, at_least: u64) -> TribResult<u64> {
         return self.storage_client_primary.clock(at_least).await;
     }

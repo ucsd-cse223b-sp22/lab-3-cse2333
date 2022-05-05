@@ -1,3 +1,4 @@
+use super::client::scan_server;
 use super::server::FrontServer;
 use crate::lab2::client::BinStorageClient;
 use serde::{Deserialize, Serialize};
@@ -23,9 +24,10 @@ pub struct StatusTableEntry {
 /// underlying storage system.
 #[allow(unused_variables)]
 pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage>> {
+    let table = scan_server(backs.clone()).await;
     Ok(Box::new(BinStorageClient {
         backs,
-        server_table: todo!(),
+        status_table: table,
     }))
 }
 
