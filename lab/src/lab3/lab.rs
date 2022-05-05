@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use tokio::{select, time};
-use tonic::Status;
+// use tonic::codegen::http::status;
 use tribbler::err::TribblerError;
-use tribbler::rpc::{Clock, Key, KeyValue};
+use tribbler::rpc::{Clock, Key, KeyValue, Pattern};
 use tribbler::{
     config::KeeperConfig, err::TribResult, rpc::trib_storage_client::TribStorageClient,
     storage::BinStorage, trib::Server,
@@ -85,7 +85,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
                 status_client
                     .set(KeyValue {
-                        key: "backendStatus".to_string(),
+                        key: "BackendStatus".to_string(),
                         value: serialized_table,
                     })
                     .await?;
@@ -94,21 +94,20 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
             }
         }
     }
-    let mut clock: u64 = 0;
 
+    // now status_table stores the previous recorded backend status table
+
+    let mut clock: u64 = 0;
     select! {
         _ =  async {
                 loop {
                     let mut clocks = Vec::new();
-                    for addr in kc.backs.iter() {
+                    for i in 0..kc.backs.len() {
                         let mut addr_http = "http://".to_string();
-                        addr_http.push_str(addr);
+                        addr_http.push_str(&kc.backs[i]);
                         let client = TribStorageClient::connect(addr_http.to_string()).await;
                         match client {
                             Ok(value) => {
-                                // compare with the status table
-                                // TODO 2.1: node joins
-                                // data migration for joining (table, node)
                                 let mut c = value;
                                 match c.clock(Clock { timestamp: clock }).await {
                                     Ok(v0) => {
@@ -118,15 +117,49 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                         return Box::new(TribblerError::Unknown(e.to_string()));
                                     }
                                 }
+                                // newly joined node
+                                if !status_table[i].status {
+                                    match node_join(i, &status_table).await {
+                                        Ok(_) => {println!("Node {} join succeeded", i);},
+                                        Err(_) => {println!("Node {} join failed", i);},
+                                    }
+                                    status_table[i].status = true;
+                                }
                             }
                             Err(e) => {
-                                // compare with the status table
-                                // TODO 2.2: node fails
-                                // data migrate for failure (table, node)
+                                // node leaves
+                                if status_table[i].status {
+                                    match node_leave(i, &status_table).await {
+                                        Ok(_) => {println!("Node {} leave succeeded", i);},
+                                        Err(_) => {println!("Node {} leave failed", i);},
+                                    }
+                                    status_table[i].status = false;
+                                }
                                 return Box::new(TribblerError::Unknown(e.to_string()));
                             }
                         }
                     }
+                    // write the updated status_table into storage
+                    // TODO: store replica
+                    let serialized_table = serde_json::to_string(&status_table).unwrap();
+                    let mut hasher = DefaultHasher::new();
+                    hasher.write("BackendStatus".as_bytes());
+                    let mut status_storage_index = hasher.finish() as usize % kc.backs.len();
+                    while !status_table[status_storage_index].status {
+                        status_storage_index = (status_storage_index + 1) % kc.backs.len();
+                    }
+                    match TribStorageClient::connect(status_addr.to_string()).await {
+                        Ok(mut client) => {
+                            match client.set(KeyValue {
+                            key: "BackendStatus".to_string(),
+                            value: serialized_table,
+                        }).await {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        }},
+                        Err(_) => (),
+                    }
+
                     clock = *clocks.iter().max().unwrap();
                     for addr in kc.backs.iter() {
                         let mut addr_http = "http://".to_string();
@@ -151,6 +184,123 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
     return Ok(());
 }
 
+// Migrate data from src node to dest node
+// Initial order: start -> dest -> src
+// Range: (start, dest]
+// TODO: if dest > src?
+#[allow(unused_variables)]
+pub async fn data_migration(
+    start: usize,
+    dst: usize,
+    src: usize,
+    status_table: &Vec<StatusTableEntry>,
+) -> TribResult<()> {
+    let mut d = TribStorageClient::connect(status_table[dst].addr.to_string()).await?;
+    let mut s = TribStorageClient::connect(status_table[src].addr.to_string()).await?;
+    // Key-value pair
+    let all_keys = s
+        .keys(Pattern {
+            prefix: "".to_string(),
+            suffix: "".to_string(),
+        })
+        .await?
+        .into_inner()
+        .list;
+    for each_key in all_keys {
+        // check if should copy this one
+        let mut hasher = DefaultHasher::new();
+        hasher.write(each_key.as_bytes());
+        let h = hasher.finish() as usize % status_table.len();
+        if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
+            d.set(KeyValue {
+                key: each_key.to_string(),
+                value: s.get(Key { key: each_key }).await?.into_inner().value,
+            })
+            .await?;
+        }
+    }
+
+    // Key-List
+    let all_list_keys = s
+        .list_keys(Pattern {
+            prefix: "".to_string(),
+            suffix: "".to_string(),
+        })
+        .await?
+        .into_inner()
+        .list;
+    for each_key in all_list_keys {
+        let mut hasher = DefaultHasher::new();
+        hasher.write(each_key.as_bytes());
+        let h = hasher.finish() as usize % status_table.len();
+        if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
+            // append new records
+            let records = s
+                .list_get(Key {
+                    key: each_key.to_string(),
+                })
+                .await?
+                .into_inner()
+                .list;
+            for entry in records {
+                d.list_append(KeyValue {
+                    key: each_key.to_string(),
+                    value: entry,
+                })
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(unused_variables)]
+pub async fn node_join(curr: usize, status_table: &Vec<StatusTableEntry>) -> TribResult<()> {
+    // find successor and prodecessor's predecessor
+    let len = status_table.len();
+    let mut prev = (curr + len - 1) % len;
+    let mut next = (curr + 1) % len;
+    while !status_table[next].status {
+        next = (next + 1) % len;
+    }
+    while !status_table[prev].status {
+        prev = (prev + len - 1) % len;
+    }
+    prev = (prev + len - 1) % len;
+    while !status_table[prev].status {
+        prev = (prev + len - 1) % len;
+    }
+
+    // data migration from succ to curr, copy data range (prev, curr]
+    return data_migration(prev, curr, next, status_table).await;
+}
+
+#[allow(unused_variables)]
+pub async fn node_leave(curr: usize, status_table: &Vec<StatusTableEntry>) -> TribResult<()> {
+    // find successor and the second previous node
+    let len = status_table.len();
+    let mut prev = (curr + len - 1) % len;
+    let mut next = (curr + 1) % len;
+    while !status_table[next].status {
+        next = (next + 1) % len;
+    }
+    while !status_table[prev].status {
+        prev = (prev + len - 1) % len;
+    }
+    let mut prev_prev = (prev + len - 1) % len;
+    let mut next_next = (next + 1) % len;
+    while !status_table[prev_prev].status {
+        prev_prev = (prev_prev + len - 1) % len;
+    }
+    while !status_table[next_next].status {
+        next_next = (next_next + 1) % len;
+    }
+
+    let _ = data_migration(prev_prev, next, prev, status_table).await?;
+    let _ = data_migration(prev, next_next, next, status_table).await?;
+    Ok(())
+}
+
 /// this function accepts a [BinStorage] client which should be used in order to
 /// implement the [Server] trait.
 ///
@@ -168,5 +318,3 @@ pub async fn new_front(
         bin_storage: bin_storage,
     }))
 }
-
-// TODO: data migration
