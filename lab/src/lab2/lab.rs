@@ -87,10 +87,24 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 serde_json::from_str::<Vec<StatusTableEntry>>(&value.into_inner().value).unwrap();
         }
         Err(e) => {
-            // TODO: store into replica
             if e.message().eq("No key provided") {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
                 status_client
+                    .set(KeyValue {
+                        key: "BackendStatus".to_string(),
+                        value: serialized_table.to_string(),
+                    })
+                    .await?;
+                // store replica
+                let mut replica_index = (status_storage_index + 1) % kc.backs.len();
+                while !status_table[replica_index].status {
+                    replica_index = (replica_index + 1) % kc.backs.len();
+                }
+                let mut replica_addr = "http://".to_string();
+                replica_addr.push_str(&status_table[replica_index].addr.clone());
+                let mut replica_client =
+                    TribStorageClient::connect(replica_addr.to_string()).await?;
+                replica_client
                     .set(KeyValue {
                         key: "BackendStatus".to_string(),
                         value: serialized_table,
@@ -163,7 +177,6 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                         }
                     }
                     // write the updated status_table into storage
-                    // TODO: store replica
                     let serialized_table = serde_json::to_string(&status_table).unwrap();
                     let mut hasher = DefaultHasher::new();
                     hasher.write("BackendStatus".as_bytes());
@@ -171,15 +184,37 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                     while !status_table[status_storage_index].status {
                         status_storage_index = (status_storage_index + 1) % kc.backs.len();
                     }
-                    match TribStorageClient::connect(status_addr.to_string()).await {
+                    let mut new_status_addr = "http://".to_string();
+                    new_status_addr.push_str(&status_table[status_storage_index].addr.clone());
+                    match TribStorageClient::connect(new_status_addr.to_string()).await {
                         Ok(mut client) => {
                             match client.set(KeyValue {
                             key: "BackendStatus".to_string(),
-                            value: serialized_table,
+                            value: serialized_table.to_string(),
                         }).await {
                             Ok(_) => (),
                             Err(_) => (),
                         }},
+                        Err(_) => (),
+                    }
+
+                    // store replica
+                    let mut replica_index = (status_storage_index + 1) % kc.backs.len();
+                    while !status_table[replica_index].status {
+                        replica_index = (replica_index + 1) % kc.backs.len();
+                    }
+                    let mut replica_addr = "http://".to_string();
+                    replica_addr.push_str(&status_table[replica_index].addr.clone());
+                    match TribStorageClient::connect(replica_addr.to_string()).await {
+                        Ok(mut client) => {
+                            match client.set(KeyValue {
+                                key: "BackendStatus".to_string(),
+                                value: serialized_table,
+                            }).await {
+                                Ok(_) => (),
+                                Err(_) => (),
+                            }
+                        },
                         Err(_) => (),
                     }
 
