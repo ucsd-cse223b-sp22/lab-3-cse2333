@@ -27,6 +27,7 @@ pub async fn scan_server(backs: Vec<String>) -> Vec<StatusTableEntry> {
     }
     return status_table;
 }
+#[derive(Debug)]
 pub struct StatusTableEntry {
     pub addr: String,
     pub status: bool,
