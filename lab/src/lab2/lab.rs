@@ -23,7 +23,10 @@ pub struct StatusTableEntry {
 /// underlying storage system.
 #[allow(unused_variables)]
 pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage>> {
-    Ok(Box::new(BinStorageClient { backs: backs }))
+    Ok(Box::new(BinStorageClient {
+        backs,
+        server_table: todo!(),
+    }))
 }
 
 // TODO: migration interrupt, keeper redo log
