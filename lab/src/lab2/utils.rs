@@ -93,6 +93,8 @@ pub async fn data_migration(
     leave: bool,
     status_table: &Vec<StatusTableEntry>,
 ) -> TribResult<()> {
+    println!("DATA MIGRATION INFORMATION");
+    println!("start {}, dst {}, src {}, leave {}", start, dst, src, leave);
     // connect to dest and src
     let mut addr_http = "http://".to_string();
     addr_http.push_str(&status_table[dst].addr);
@@ -115,7 +117,9 @@ pub async fn data_migration(
     hasher.write("MigrationDataLog".as_bytes());
     let backend_hash = hasher.finish() as usize % status_table.len();
 
+    println!("````````");
     let x = write_twice(mig_log, backend_hash, false, status_table).await?;
+    println!("]]]]]]]]]");
 
     // Key-value pair
     let all_keys = s
@@ -204,7 +208,7 @@ pub async fn data_migration(
         leave: leave,
     })
     .unwrap();
-
+    println!("AFTER MIGRATION");
     let x = write_twice(mig_end_log, backend_hash, false, status_table).await?;
     Ok(())
 }
