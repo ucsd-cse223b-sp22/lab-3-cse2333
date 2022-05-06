@@ -6,38 +6,14 @@ use std::hash::Hasher;
 use tokio::time::Instant;
 use tribbler::err::TribResult;
 use tribbler::rpc::trib_storage_client::TribStorageClient;
+use tribbler::rpc::Key;
 use tribbler::storage::{BinStorage, Storage};
+
+use super::utils::StatusTableEntry;
 
 pub async fn scan_server(backs: Vec<String>) -> Vec<StatusTableEntry> {
     // scan all servers and establish the table
-
-    // // single process
-    // let timer1 = Instant::now();
-    // let mut status_table: Vec<StatusTableEntry> = Vec::new();
-    // for i in backs.iter() {
-    //     let mut addr_http = "http://".to_string();
-    //     addr_http.push_str(i);
-    //     let client = TribStorageClient::connect(addr_http.clone()).await;
-    //     match client {
-    //         Ok(_) => status_table.push(StatusTableEntry {
-    //             addr: i.clone(),
-    //             status: true,
-    //         }),
-    //         Err(_) => status_table.push(StatusTableEntry {
-    //             addr: i.clone(),
-    //             status: false,
-    //         }),
-    //     }
-    // }
-    // // println!("====single-processor===={:?}", status_table);
-    // println!(
-    //     "single process timing:{:?} ms",
-    //     timer1.elapsed().as_millis()
-    // );
-    // // return status_table;
-
     // multi-processor
-    // todo: check order!!!!
     let timer2 = Instant::now();
     let mut handles = Vec::with_capacity(backs.len());
     let mut status_table_multi: Vec<StatusTableEntry> = Vec::new();
@@ -67,19 +43,65 @@ pub async fn scan_single_server(addr: String) -> StatusTableEntry {
         },
     }
 }
-#[derive(Debug)]
-pub struct StatusTableEntry {
-    pub addr: String,
-    pub status: bool,
-}
+
+// pub async fn update_table(
+//     prev_table: Vec<StatusTableEntry>,
+//     backs: Vec<String>,
+// ) -> Vec<StatusTableEntry> {
+//     // prev_table = scan_server(backs).await;
+//     let mut hasher = DefaultHasher::new();
+//     hasher.write("BackendStatus".as_bytes());
+//     let mut backend_hash = hasher.finish() as usize % backs.len();
+//     while !prev_table[backend_hash].status {
+//         backend_hash = (backend_hash + 1) % backs.len();
+//     }
+
+//     let mut status_addr = "http://".to_string();
+//     status_addr.push_str(&backs[backend_hash].clone());
+//     let mut status_client = match TribStorageClient::connect(status_addr.to_string()).await {
+//         Ok(client) => client,
+//         Err(e) => {
+//             prev_table[backend_hash].status = false;
+//             while !prev_table[backend_hash].status {
+//                 backend_hash = (backend_hash + 1) % backs.len();
+//             }
+//             let mut status_addr_temp = "http://".to_string();
+//             status_addr_temp.push_str(&backs[backend_hash].clone());
+//             match TribStorageClient::connect(status_addr_temp.to_string()).await {
+//                 Ok(c) => c,
+//                 Err(_) => {
+//                     println!(
+//                         "!!!unexpected error{:?}, this backend should not be crashed!!!",
+//                         e
+//                     );
+//                     return ();
+//                 }
+//             }
+//         }
+//     };
+//     //check connection
+//     let res_table = match status_client
+//         .get(Key {
+//             key: "BackendStatus".to_string(),
+//         })
+//         .await
+//     {
+//         Ok(value) => {
+//             serde_json::from_str::<Vec<StatusTableEntry>>(&value.into_inner().value).unwrap();
+//             println!("here I updated the table successfully!!!");
+//         }
+//         Err(e) => {
+//             println!(
+//                 "unexpected error{:?}, this backend should have the table!!!",
+//                 e
+//             );
+//         }
+//     };
+//     return res_table;
+// }
 pub struct BinStorageClient {
     pub backs: Vec<String>,
     pub status_table: Vec<StatusTableEntry>,
-}
-impl BinStorageClient {
-    async fn update_table(mut self) {
-        self.status_table = scan_server(self.backs).await;
-    }
 }
 // bin() which takes a bin name and returns a Storage
 #[async_trait]
