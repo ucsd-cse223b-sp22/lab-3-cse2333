@@ -59,7 +59,6 @@ pub async fn data_migration(
         .into_inner()
         .list;
     for each_key in all_list_keys {
-        // TODO: if each_key exists in dest, remove all entries
         let mut hasher = DefaultHasher::new();
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
