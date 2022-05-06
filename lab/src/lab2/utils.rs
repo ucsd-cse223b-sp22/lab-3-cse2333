@@ -14,7 +14,6 @@ pub struct StatusTableEntry {
 // Migrate data from src node to dest node
 // Initial order: start -> dest -> src
 // Range: (start, dest] or (start, src]
-// TODO: if dest > src?
 // TODO: error catching?
 #[allow(unused_variables)]
 pub async fn data_migration(
@@ -46,24 +45,14 @@ pub async fn data_migration(
         let mut hasher = DefaultHasher::new();
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
-        // TODO: check different case
-        if !leave {
-            if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
-                d.set(KeyValue {
-                    key: each_key.to_string(),
-                    value: s.get(Key { key: each_key }).await?.into_inner().value,
-                })
-                .await?;
-            }
-        } else {
-            // leave
-            if (h <= src && h > start) || (start > src && (h > start || h <= src)) {
-                d.set(KeyValue {
-                    key: each_key.to_string(),
-                    value: s.get(Key { key: each_key }).await?.into_inner().value,
-                })
-                .await?;
-            }
+        if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
+            || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
+        {
+            d.set(KeyValue {
+                key: each_key.to_string(),
+                value: s.get(Key { key: each_key }).await?.into_inner().value,
+            })
+            .await?;
         }
     }
     // Key-List
@@ -79,7 +68,9 @@ pub async fn data_migration(
         let mut hasher = DefaultHasher::new();
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
-        if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
+        if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
+            || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
+        {
             // remove old entries
             let old_records = d
                 .list_get(Key {
@@ -138,7 +129,6 @@ pub async fn node_leave(curr: usize, status_table: &Vec<StatusTableEntry>) -> Tr
 
     let _ = data_migration(prev, next_next, next, true, status_table).await?;
     let _ = data_migration(prev_prev, next, prev, true, status_table).await?;
-    println!("HERE 3");
     Ok(())
 }
 
