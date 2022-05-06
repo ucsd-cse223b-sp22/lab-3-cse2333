@@ -306,50 +306,50 @@ async fn test_bins_diff_keys_massive_set_get() -> TribResult<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_bins_same_key_massive_set_get() -> TribResult<()> {
-    // funny story: 根据pigeonhole principle (雀巢定律，鸽笼定律，抽屉原理，whatever you called it blablabla)
-    // 我们只需要4个bin!!!就可以测出你有没有分隔开来virtual bins!!!
-    let mut backs=Vec::new();
-    for i in 0..4{
-        let mut ip_str = "127.0.0.1:".to_string();
-        let port_num:i32 = 33951+i;
-        ip_str.push_str(&port_num.to_string());
-        backs.push(ip_str);
-    }
-    let keeper_addr = "127.0.0.1:33950".to_string();
-    let channels = setup(backs.clone(), keeper_addr).await?;
-    let bin_client = lab2::new_bin_client(backs.clone()).await?;
-    // let frontend = lab2::new_front(bc).await?;
-    let STRING_LEN = 30;
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_bins_same_key_massive_set_get() -> TribResult<()> {
+//     // funny story: 根据pigeonhole principle (雀巢定律，鸽笼定律，抽屉原理，whatever you called it blablabla)
+//     // 我们只需要4个bin!!!就可以测出你有没有分隔开来virtual bins!!!
+//     let mut backs=Vec::new();
+//     for i in 0..4{
+//         let mut ip_str = "127.0.0.1:".to_string();
+//         let port_num:i32 = 33951+i;
+//         ip_str.push_str(&port_num.to_string());
+//         backs.push(ip_str);
+//     }
+//     let keeper_addr = "127.0.0.1:33950".to_string();
+//     let channels = setup(backs.clone(), keeper_addr).await?;
+//     let bin_client = lab2::new_bin_client(backs.clone()).await?;
+//     // let frontend = lab2::new_front(bc).await?;
+//     let STRING_LEN = 30;
 
-    let KEY = "jerkoff";
-    let mut bin_val_map = HashMap::new();
-    for i in 0..1000 {
-        let bin_name = generate_random_string(STRING_LEN);
-        let value = generate_random_string(STRING_LEN);
-        bin_val_map.insert(bin_name.to_string(), value.to_string());
-        let client = bin_client.bin(bin_name.as_str()).await?;
-        client.set(&KeyValue {
-            key: KEY.to_string(),
-            value: value.to_string(),
-        }).await?;
-    }
+//     let KEY = "jerkoff";
+//     let mut bin_val_map = HashMap::new();
+//     for i in 0..1000 {
+//         let bin_name = generate_random_string(STRING_LEN);
+//         let value = generate_random_string(STRING_LEN);
+//         bin_val_map.insert(bin_name.to_string(), value.to_string());
+//         let client = bin_client.bin(bin_name.as_str()).await?;
+//         client.set(&KeyValue {
+//             key: KEY.to_string(),
+//             value: value.to_string(),
+//         }).await?;
+//     }
 
-    for bin_name in bin_val_map.keys() {
-        let expected_value = bin_val_map.get(bin_name).unwrap();
-        let client = bin_client.bin(bin_name.as_str()).await?;
-        let actual_value = client.get(KEY).await?.unwrap();
-        if actual_value != expected_value.to_string() {
-            assert!(false, "Where's our friendly little indirection layer that virtually separates the bins? Huh? WHERE IS IT? WHERE IS IT???!!!!");
-        }
-    }
+//     for bin_name in bin_val_map.keys() {
+//         let expected_value = bin_val_map.get(bin_name).unwrap();
+//         let client = bin_client.bin(bin_name.as_str()).await?;
+//         let actual_value = client.get(KEY).await?.unwrap();
+//         if actual_value != expected_value.to_string() {
+//             assert!(false, "Where's our friendly little indirection layer that virtually separates the bins? Huh? WHERE IS IT? WHERE IS IT???!!!!");
+//         }
+//     }
     
-    for i in channels.iter(){
-        let _ = i.send(()).await;
-    }
-    Ok(())
-}
+//     for i in channels.iter(){
+//         let _ = i.send(()).await;
+//     }
+//     Ok(())
+// }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_signup_users() -> TribResult<()> {
