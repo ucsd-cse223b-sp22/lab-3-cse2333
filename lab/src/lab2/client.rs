@@ -25,7 +25,7 @@ pub async fn scan_server(backs: Vec<String>) -> Vec<StatusTableEntry> {
         status_table_multi.push(entry);
     }
     // println!("====muitl-processor===={:?}", status_table_multi);
-    println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
+    // println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
     return status_table_multi;
 }
 pub async fn scan_single_server(addr: String) -> StatusTableEntry {

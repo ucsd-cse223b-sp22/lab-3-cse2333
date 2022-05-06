@@ -151,18 +151,18 @@ impl KeeperClient for Keeper {
                 }
             }
         }
-        println!("current candicates are {:?}", &leaders);
+        // println!("current candicates are {:?}", &leaders);
         return *leaders.iter().min().unwrap();
     }
 
     async fn keeper_heart_beat(&self, id: i64, primary_id: i64) -> TribResult<Bool> {
         let mut addr_http = "http://".to_string();
         addr_http.push_str(self.keepers.get(primary_id as usize).unwrap());
-        println!(
-            "{} sends the hearbeat to {}",
-            self.keepers.get(id as usize).unwrap(),
-            primary_id
-        );
+        // println!(
+        //     // "{} sends the hearbeat to {}",
+        //     self.keepers.get(id as usize).unwrap(),
+        //     primary_id
+        // );
         let client = KeeperWorkClient::connect(addr_http.to_string()).await;
         match client {
             Ok(_) => Ok(Bool { value: true }),
