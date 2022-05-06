@@ -7,15 +7,13 @@ use crate::keeper::keeper_work_client::KeeperWorkClient;
 use crate::keeper::keeper_work_server::KeeperWorkServer;
 use crate::keeper::{Index, Leader};
 use crate::lab2::client::BinStorageClient;
-use crate::lab2::utils::{
-    data_migration, node_join, node_leave, write_twice, MigrationDataEntry, StatusTableEntry,
-};
+use crate::lab2::utils::{node_join, node_leave, write_twice, StatusTableEntry};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use tokio::{select, time};
 use tonic::transport::Server;
 use tribbler::err::TribblerError;
-use tribbler::rpc::{Clock, Key, KeyValue, Pattern};
+use tribbler::rpc::{Clock, Key, Pattern};
 use tribbler::{
     config::KeeperConfig, err::TribResult, rpc::trib_storage_client::TribStorageClient,
     storage::BinStorage,
@@ -55,44 +53,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
 
     // get a initial status table
     let mut status_table = scan_server(kc.backs.clone()).await;
-
     let mut kc_addr_http = "http://".to_string();
     kc_addr_http.push_str(kc.addrs.get(kc.this).unwrap());
-
-    // redo migration if needed
-    let mut mig_hasher = DefaultHasher::new();
-    mig_hasher.write("MigrationDataLog".as_bytes());
-    let log_hash = mig_hasher.finish() as usize % kc.backs.len();
-    let mut log_index = log_hash;
-    while !status_table[log_index].status {
-        log_index = (log_index + 1) % kc.backs.len();
-    }
-    let mut log_addr_http = "http://".to_string();
-    log_addr_http.push_str(&status_table[log_index].addr.clone());
-    let mut log_client = TribStorageClient::connect(log_index.to_string()).await?;
-    let logs = log_client
-        .list_get(Key {
-            key: "MigrationDataLog".to_string(),
-        })
-        .await?
-        .into_inner()
-        .list;
-    if logs.len() > 0 {
-        let recent_log = serde_json::from_str::<MigrationDataEntry>(&logs[logs.len() - 1]).unwrap();
-        if recent_log.start == true {
-            let mut dst = recent_log.dst;
-            while !status_table[dst].status {
-                dst = (dst + 1) % kc.backs.len();
-            }
-            let mut src = recent_log.src;
-            while !status_table[src].status {
-                src = (src + 1) % kc.backs.len();
-            }
-            let range = recent_log.range;
-            let leave = recent_log.leave;
-            let x = data_migration(range, dst, src, leave, &status_table).await?;
-        }
-    }
 
     // try to fetch the previous one
     let mut hasher = DefaultHasher::new();
@@ -120,14 +82,12 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
         Err(e) => {
             if e.message().eq("No key provided") {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
-                let x =
-                    write_twice(serialized_table, status_storage_index, true, &status_table).await;
+                let x = write_twice(serialized_table, status_storage_index, &status_table).await;
             } else {
                 println!("SHOULD NOT APPEAR");
             }
         }
     }
-
     // now status_table stores the previous recorded backend status table
     let mut clock: u64 = 0;
     select! {
@@ -226,7 +186,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 // if this keeper is not the leader,
                 // block it in a hear_beat
                 if leader_id != (kc.this as i64) {
-                    // println!("the {} keep client is not the leader", kc_addr_http);
+                    println!("the {} keep client is not the leader", kc_addr_http);
                     // start heartbeat
                     let mut primary_alive = true;
                     while primary_alive {
@@ -308,7 +268,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                         }
                         // write the updated status_table into storage
                         let serialized_table = serde_json::to_string(&status_table).unwrap();
-                        let x = write_twice(serialized_table, backend_hash, true, &status_table).await;
+                        let x = write_twice(serialized_table, backend_hash, &status_table).await;
 
                         clock = *clocks.iter().max().unwrap();
                         for addr in kc.backs.iter() {
@@ -319,7 +279,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                 Err(e) => (),
                             }
                         }
-                        time::sleep(time::Duration::from_secs(1)).await;
+                        time::sleep(time::Duration::from_secs(4)).await;
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
