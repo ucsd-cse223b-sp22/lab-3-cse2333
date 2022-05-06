@@ -21,6 +21,7 @@ pub async fn data_migration(
     start: usize,
     dst: usize,
     src: usize,
+    leave: bool,
     status_table: &Vec<StatusTableEntry>,
 ) -> TribResult<()> {
     // connect to dest and src
@@ -46,12 +47,23 @@ pub async fn data_migration(
         hasher.write(each_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
         // TODO: check different case
-        if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
-            d.set(KeyValue {
-                key: each_key.to_string(),
-                value: s.get(Key { key: each_key }).await?.into_inner().value,
-            })
-            .await?;
+        if !leave {
+            if (h <= dst && h > start) || (start > src && (h > start || h <= dst)) {
+                d.set(KeyValue {
+                    key: each_key.to_string(),
+                    value: s.get(Key { key: each_key }).await?.into_inner().value,
+                })
+                .await?;
+            }
+        } else {
+            // leave
+            if (h <= src && h > start) || (start > src && (h > start || h <= src)) {
+                d.set(KeyValue {
+                    key: each_key.to_string(),
+                    value: s.get(Key { key: each_key }).await?.into_inner().value,
+                })
+                .await?;
+            }
         }
     }
     // Key-List
@@ -124,8 +136,8 @@ pub async fn node_leave(curr: usize, status_table: &Vec<StatusTableEntry>) -> Tr
         next_next = (next_next + 1) % len;
     }
 
-    let _ = data_migration(prev, next_next, next, status_table).await?;
-    let _ = data_migration(prev_prev, next, prev, status_table).await?;
+    let _ = data_migration(prev, next_next, next, true, status_table).await?;
+    let _ = data_migration(prev_prev, next, prev, true, status_table).await?;
     println!("HERE 3");
     Ok(())
 }
@@ -148,5 +160,5 @@ pub async fn node_join(curr: usize, status_table: &Vec<StatusTableEntry>) -> Tri
     }
 
     // data migration from succ to curr, copy data range (prev, curr]
-    return data_migration(prev, curr, next, status_table).await;
+    return data_migration(prev, curr, next, false, status_table).await;
 }
