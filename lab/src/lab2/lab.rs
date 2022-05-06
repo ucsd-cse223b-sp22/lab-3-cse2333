@@ -151,7 +151,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
         _ =  async {
             // the client thread
             time::sleep(time::Duration::from_secs(1)).await;
-            println!("the {} keep client starts", kc_addr_http);
+            // println!("the {} keep client starts", kc_addr_http);
             let keeper = Keeper {
                 keepers: kc.addrs.clone(),
                 backs: kc.backs.clone(),
@@ -168,7 +168,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                     };
                     match c.set_index(Index{index: (kc.this as i64) }).await{
                         Ok(_) => {
-                            println!("{} sets the index is {}", kc_addr_http, kc.this);
+                            // println!("{} sets the index is {}", kc_addr_http, kc.this);
                         },
                         Err(e) => {
                             println!("{} set index goes wrong", kc_addr_http);
@@ -180,12 +180,12 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                     ();
                 }
             }
-            println!("the {} keep client check_leader", kc_addr_http);
+            // println!("the {} keep client check_leader", kc_addr_http);
             // just go online
             let res = keeper.check_leader().await;
-            println!("the current leader is {}",res);
+            // println!("the current leader is {}",res);
             if res > 0 {
-                println!("{} finds there is a leader", kc_addr_http);
+                // println!("{} finds there is a leader", kc_addr_http);
                 // start heartbeat
                 let mut primary_alive = true;
                 while primary_alive {
@@ -206,7 +206,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
             loop {
                 // start selecting leader
                 let leader_id = keeper.select_leader().await;
-                println!("the {} keep client is not the leader", kc_addr_http);
+                // println!("the {} keep client is not the leader", kc_addr_http);
                 let client = KeeperWorkClient::connect(kc_addr_http.to_string()).await;
                 match client {
                     Ok(value) => {
@@ -223,7 +223,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 // if this keeper is not the leader,
                 // block it in a hear_beat
                 if leader_id != (kc.this as i64) {
-                    println!("the {} keep client is not the leader", kc_addr_http);
+                    // println!("the {} keep client is not the leader", kc_addr_http);
                     // start heartbeat
                     let mut primary_alive = true;
                     while primary_alive {
@@ -235,7 +235,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                 time::sleep(time::Duration::from_secs(1)).await;
                             }
                             Err(e) => {
-                                println!("{} is dead", leader_id);
+                                // println!("{} is dead", leader_id);
                                 primary_alive = false;
                             }
                         }
@@ -243,6 +243,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 } else {
                     println!("the {} keep client is the leader", kc_addr_http);
                     loop{
+                        println!(" {} starts do its work", kc_addr_http);
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
@@ -343,7 +344,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             addr_http.push_str(addr);
                             match TribStorageClient::connect(addr_http.to_string()).await {
                                 Ok(mut c) => {let _ = c.clock(Clock { timestamp: clock });}
-                                Err(e) => {return Box::new(TribblerError::Unknown(e.to_string()));}
+                                Err(e) => (),
                             }
                         }
                         time::sleep(time::Duration::from_secs(3)).await;
