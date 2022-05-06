@@ -107,6 +107,8 @@ impl Server for FrontServer {
         }
 
         let user_list = storage_client.list_get("Users").await?.0;
+        //todo: if error occurs, call update table and bin, then list_get again!!
+        // let res = self.bin_storage.update_table();
         if user_list.contains(&user.to_string()) {
             return Err(Box::new(TribblerError::UsernameTaken(user.to_string())));
         }

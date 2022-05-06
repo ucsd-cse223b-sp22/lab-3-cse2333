@@ -53,22 +53,24 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
 
     // get a initial status table
     // TODO: use tokio::spwan
-    let mut status_table: Vec<StatusTableEntry> = Vec::new();
-    for addr in kc.backs.iter() {
-        let mut addr_http = "http://".to_string();
-        addr_http.push_str(addr);
-        let client = TribStorageClient::connect(addr_http.to_string()).await;
-        match client {
-            Ok(value) => status_table.push(StatusTableEntry {
-                addr: addr.to_string(),
-                status: true,
-            }),
-            Err(e) => status_table.push(StatusTableEntry {
-                addr: addr.to_string(),
-                status: false,
-            }),
-        }
-    }
+    // let mut status_table: Vec<StatusTableEntry> = Vec::new();
+    // for addr in kc.backs.iter() {
+    //     let mut addr_http = "http://".to_string();
+    //     addr_http.push_str(addr);
+    //     let client = TribStorageClient::connect(addr_http.to_string()).await;
+    //     match client {
+    //         Ok(value) => status_table.push(StatusTableEntry {
+    //             addr: addr.to_string(),
+    //             status: true,
+    //         }),
+    //         Err(e) => status_table.push(StatusTableEntry {
+    //             addr: addr.to_string(),
+    //             status: false,
+    //         }),
+    //     }
+    // }
+    let mut status_table = scan_server(kc.backs.clone()).await;
+
     let mut kc_addr_http = "http://".to_string();
     kc_addr_http.push_str(kc.addrs.get(kc.this).unwrap());
 
