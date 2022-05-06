@@ -55,7 +55,7 @@ pub async fn write_twice(
     }
 
     // write into replica
-    index = index + 1;
+    index = (index + 1) % status_table.len();
     while !status_table[index].status {
         index = (index + 1) % status_table.len();
     }

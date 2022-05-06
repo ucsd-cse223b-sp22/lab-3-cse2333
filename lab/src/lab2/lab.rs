@@ -7,7 +7,9 @@ use crate::keeper::keeper_work_client::KeeperWorkClient;
 use crate::keeper::keeper_work_server::KeeperWorkServer;
 use crate::keeper::{Index, Leader};
 use crate::lab2::client::BinStorageClient;
-use crate::lab2::utils::{node_join, node_leave, StatusTableEntry};
+use crate::lab2::utils::{
+    data_migration, node_join, node_leave, write_twice, MigrationDataEntry, StatusTableEntry,
+};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use tokio::{select, time};
@@ -52,27 +54,45 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
     }
 
     // get a initial status table
-    // TODO: use tokio::spwan
-    // let mut status_table: Vec<StatusTableEntry> = Vec::new();
-    // for addr in kc.backs.iter() {
-    //     let mut addr_http = "http://".to_string();
-    //     addr_http.push_str(addr);
-    //     let client = TribStorageClient::connect(addr_http.to_string()).await;
-    //     match client {
-    //         Ok(value) => status_table.push(StatusTableEntry {
-    //             addr: addr.to_string(),
-    //             status: true,
-    //         }),
-    //         Err(e) => status_table.push(StatusTableEntry {
-    //             addr: addr.to_string(),
-    //             status: false,
-    //         }),
-    //     }
-    // }
     let mut status_table = scan_server(kc.backs.clone()).await;
 
     let mut kc_addr_http = "http://".to_string();
     kc_addr_http.push_str(kc.addrs.get(kc.this).unwrap());
+
+    // redo migration if needed
+    let mut mig_hasher = DefaultHasher::new();
+    mig_hasher.write("MigrationDataLog".as_bytes());
+    let log_hash = mig_hasher.finish() as usize % kc.backs.len();
+    let mut log_index = log_hash;
+    while !status_table[log_index].status {
+        log_index = (log_index + 1) % kc.backs.len();
+    }
+    let mut log_addr_http = "http://".to_string();
+    log_addr_http.push_str(&status_table[log_index].addr.clone());
+    let mut log_client = TribStorageClient::connect(log_index.to_string()).await?;
+    let logs = log_client
+        .list_get(Key {
+            key: "MigrationDataLog".to_string(),
+        })
+        .await?
+        .into_inner()
+        .list;
+    if logs.len() > 0 {
+        let recent_log = serde_json::from_str::<MigrationDataEntry>(&logs[logs.len() - 1]).unwrap();
+        if recent_log.start == true {
+            let mut dst = recent_log.dst;
+            while !status_table[dst].status {
+                dst = (dst + 1) % kc.backs.len();
+            }
+            let mut src = recent_log.src;
+            while !status_table[src].status {
+                src = (src + 1) % kc.backs.len();
+            }
+            let range = recent_log.range;
+            let leave = recent_log.leave;
+            let x = data_migration(range, dst, src, leave, &status_table).await?;
+        }
+    }
 
     // try to fetch the previous one
     let mut hasher = DefaultHasher::new();
@@ -100,27 +120,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
         Err(e) => {
             if e.message().eq("No key provided") {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
-                status_client
-                    .set(KeyValue {
-                        key: "BackendStatus".to_string(),
-                        value: serialized_table.to_string(),
-                    })
-                    .await?;
-                // store replica
-                let mut replica_index = (status_storage_index + 1) % kc.backs.len();
-                while !status_table[replica_index].status {
-                    replica_index = (replica_index + 1) % kc.backs.len();
-                }
-                let mut replica_addr = "http://".to_string();
-                replica_addr.push_str(&status_table[replica_index].addr.clone());
-                let mut replica_client =
-                    TribStorageClient::connect(replica_addr.to_string()).await?;
-                replica_client
-                    .set(KeyValue {
-                        key: "BackendStatus".to_string(),
-                        value: serialized_table,
-                    })
-                    .await?;
+                let x =
+                    write_twice(serialized_table, status_storage_index, true, &status_table).await;
             } else {
                 println!("SHOULD NOT APPEAR");
             }
@@ -307,37 +308,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                         }
                         // write the updated status_table into storage
                         let serialized_table = serde_json::to_string(&status_table).unwrap();
-                        let mut status_storage_index = backend_hash;
-                        while !status_table[status_storage_index].status {
-                            status_storage_index = (status_storage_index + 1) % kc.backs.len();
-                        }
-                        let mut new_status_addr = "http://".to_string();
-                        new_status_addr.push_str(&status_table[status_storage_index].addr.clone());
-                        match TribStorageClient::connect(new_status_addr.to_string()).await {
-                            Ok(mut client) => {
-                                let _ = client.set(KeyValue {
-                                    key: "BackendStatus".to_string(),
-                                    value: serialized_table.to_string(),
-                                }).await;
-                            },
-                            Err(_) => { println!("SHOULD NOT APPEAR 2"); },
-                        }
-                        // store replica
-                        let mut replica_index = (status_storage_index + 1) % kc.backs.len();
-                        while !status_table[replica_index].status {
-                            replica_index = (replica_index + 1) % kc.backs.len();
-                        }
-                        let mut replica_addr = "http://".to_string();
-                        replica_addr.push_str(&status_table[replica_index].addr.clone());
-                        match TribStorageClient::connect(replica_addr.to_string()).await {
-                            Ok(mut client) => {
-                                let _ = client.set(KeyValue {
-                                    key: "BackendStatus".to_string(),
-                                    value: serialized_table,
-                                }).await;
-                            },
-                            Err(_) => { println!("SHOULD NOT APPEAR 3"); },
-                        }
+                        let x = write_twice(serialized_table, backend_hash, true, &status_table).await;
+
                         clock = *clocks.iter().max().unwrap();
                         for addr in kc.backs.iter() {
                             let mut addr_http = "http://".to_string();
