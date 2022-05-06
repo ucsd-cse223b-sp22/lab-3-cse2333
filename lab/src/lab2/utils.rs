@@ -2,6 +2,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
 use serde::{Deserialize, Serialize};
+use tribbler::colon::unescape;
 use tribbler::rpc::{Key, KeyValue, Pattern};
 use tribbler::{err::TribResult, rpc::trib_storage_client::TribStorageClient};
 
@@ -41,10 +42,13 @@ pub async fn data_migration(
         .into_inner()
         .list;
     for each_key in all_keys {
+        let tmp: Vec<String> = each_key.split("::").map(|x| x.to_string()).collect();
+        let unescape_key = unescape(tmp.get(0).unwrap()).to_string();
         // check if should copy this one
         let mut hasher = DefaultHasher::new();
-        hasher.write(each_key.as_bytes());
+        hasher.write(unescape_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
+        // println!("hash: {}, key: {}", h, each_key);
         if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
             || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
         {
@@ -65,8 +69,10 @@ pub async fn data_migration(
         .into_inner()
         .list;
     for each_key in all_list_keys {
+        let tmp: Vec<String> = each_key.split("::").map(|x| x.to_string()).collect();
+        let unescape_key = unescape(tmp.get(0).unwrap()).to_string();
         let mut hasher = DefaultHasher::new();
-        hasher.write(each_key.as_bytes());
+        hasher.write(unescape_key.as_bytes());
         let h = hasher.finish() as usize % status_table.len();
         if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
             || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
