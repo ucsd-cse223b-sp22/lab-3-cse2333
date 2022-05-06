@@ -12,6 +12,75 @@ pub struct StatusTableEntry {
     pub status: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct MigrationDataEntry {
+    pub start: bool, // true for start, false for end
+    pub range: usize,
+    pub dst: usize,
+    pub src: usize,
+    pub leave: bool, // true for leave, false for join
+}
+
+#[allow(unused_variables)]
+pub async fn write_twice(
+    message: String,
+    backend: usize,
+    status_or_log: bool, // true for set, false for append
+    status_table: &Vec<StatusTableEntry>,
+) -> TribResult<()> {
+    let mut index = backend;
+
+    // write  into promary
+    while !status_table[index].status {
+        index = (index + 1) % status_table.len();
+    }
+    let mut addr_http = "http://".to_string();
+    addr_http.push_str(&status_table[index].addr.clone());
+    let mut client = TribStorageClient::connect(addr_http.to_string()).await?;
+
+    if !status_or_log {
+        client
+            .list_append(KeyValue {
+                key: "MigrationDataLog".to_string(),
+                value: message.to_string(),
+            })
+            .await?;
+    } else {
+        client
+            .set(KeyValue {
+                key: "BackendStatus".to_string(),
+                value: message.to_string(),
+            })
+            .await?;
+    }
+
+    // write into replica
+    index = index + 1;
+    while !status_table[index].status {
+        index = (index + 1) % status_table.len();
+    }
+    let mut replica_addr_http = "http://".to_string();
+    replica_addr_http.push_str(&status_table[index].addr.clone());
+    let mut replica_client = TribStorageClient::connect(replica_addr_http.to_string()).await?;
+
+    if !status_or_log {
+        replica_client
+            .list_append(KeyValue {
+                key: "MigrationDataLog".to_string(),
+                value: message.to_string(),
+            })
+            .await?;
+    } else {
+        replica_client
+            .set(KeyValue {
+                key: "BackendStatus".to_string(),
+                value: message.to_string(),
+            })
+            .await?;
+    }
+    Ok(())
+}
+
 // Migrate data from src node to dest node
 // Initial order: start -> dest -> src
 // Range: (start, dest] or (start, src]
@@ -31,6 +100,22 @@ pub async fn data_migration(
     let mut addr_http0 = "http://".to_string();
     addr_http0.push_str(&status_table[src].addr);
     let mut s = TribStorageClient::connect(addr_http0).await?;
+
+    // write log for starting data migration
+    let mig_log = serde_json::to_string(&MigrationDataEntry {
+        start: true,
+        range: start,
+        dst: dst,
+        src: src,
+        leave: leave,
+    })
+    .unwrap();
+
+    let mut hasher = DefaultHasher::new();
+    hasher.write("MigrationDataLog".as_bytes());
+    let backend_hash = hasher.finish() as usize % status_table.len();
+
+    let x = write_twice(mig_log, backend_hash, false, status_table).await?;
 
     // Key-value pair
     let all_keys = s
@@ -109,6 +194,18 @@ pub async fn data_migration(
             }
         }
     }
+
+    // write log for ending data migration
+    let mig_end_log = serde_json::to_string(&MigrationDataEntry {
+        start: false,
+        range: start,
+        dst: dst,
+        src: src,
+        leave: leave,
+    })
+    .unwrap();
+
+    let x = write_twice(mig_end_log, backend_hash, false, status_table).await?;
     Ok(())
 }
 
