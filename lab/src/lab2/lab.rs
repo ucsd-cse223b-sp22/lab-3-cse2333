@@ -242,7 +242,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                     }
                 } else {
                     println!("the {} keep client is the leader", kc_addr_http);
-                    loop{
+                    loop {
+                        println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
@@ -297,11 +298,11 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                         }
                                         status_table[i].status = false;
                                     }
+                                    println!("Connect to backend {} failed", i);
                                     // return Box::new(TribblerError::Unknown(e.to_string()));
                                 }
                             }
                         }
-
                         // write the updated status_table into storage
                         let serialized_table = serde_json::to_string(&status_table).unwrap();
                         let mut status_storage_index = backend_hash;
@@ -319,7 +320,6 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             },
                             Err(_) => { println!("SHOULD NOT APPEAR 2"); },
                         }
-
                         // store replica
                         let mut replica_index = (status_storage_index + 1) % kc.backs.len();
                         while !status_table[replica_index].status {
@@ -336,21 +336,21 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             },
                             Err(_) => { println!("SHOULD NOT APPEAR 3"); },
                         }
-
                         clock = *clocks.iter().max().unwrap();
                         for addr in kc.backs.iter() {
                             let mut addr_http = "http://".to_string();
                             addr_http.push_str(addr);
                             match TribStorageClient::connect(addr_http.to_string()).await {
                                 Ok(mut c) => {let _ = c.clock(Clock { timestamp: clock });}
-                                Err(e) => {return Box::new(TribblerError::Unknown(e.to_string()));}
+                                Err(e) => (),
                             }
                         }
-                        time::sleep(time::Duration::from_secs(3)).await;
+                        time::sleep(time::Duration::from_secs(1)).await;
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
                     }
+
                 // if this keeper is the leader,
                 // do clock sync and data migration
                 }
