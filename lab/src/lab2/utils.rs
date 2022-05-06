@@ -23,8 +23,14 @@ pub async fn data_migration(
     src: usize,
     status_table: &Vec<StatusTableEntry>,
 ) -> TribResult<()> {
-    let mut d = TribStorageClient::connect(status_table[dst].addr.to_string()).await?;
-    let mut s = TribStorageClient::connect(status_table[src].addr.to_string()).await?;
+    // connect to dest and src
+    let mut addr_http = "http://".to_string();
+    addr_http.push_str(&status_table[dst].addr);
+    let mut d = TribStorageClient::connect(addr_http).await?;
+    let mut addr_http0 = "http://".to_string();
+    addr_http0.push_str(&status_table[src].addr);
+    let mut s = TribStorageClient::connect(addr_http0).await?;
+
     // Key-value pair
     let all_keys = s
         .keys(Pattern {
@@ -48,7 +54,6 @@ pub async fn data_migration(
             .await?;
         }
     }
-
     // Key-List
     let all_list_keys = s
         .list_keys(Pattern {
@@ -119,8 +124,9 @@ pub async fn node_leave(curr: usize, status_table: &Vec<StatusTableEntry>) -> Tr
         next_next = (next_next + 1) % len;
     }
 
-    let _ = data_migration(prev_prev, next, prev, status_table).await?;
     let _ = data_migration(prev, next_next, next, status_table).await?;
+    let _ = data_migration(prev_prev, next, prev, status_table).await?;
+    println!("HERE 3");
     Ok(())
 }
 
