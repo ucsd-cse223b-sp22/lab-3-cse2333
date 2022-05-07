@@ -284,6 +284,23 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                         },
                                         Err(_) => (),
                                     }
+                                    match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                        Ok(keys) => {
+                                            for k in keys.into_inner().list {
+                                                match c.list_get(Key{ key: k.to_string()}).await {
+                                                    Ok(vv) => {
+                                                        println!("key: {}, list:", k.to_string());
+                                                        for vvv in vv.into_inner().list {
+                                                            println!("{}", vvv);
+                                                        }
+                                                    }
+                                                    Err(e) => (),
+                                                }
+                                            }
+                                        },
+                                        Err(_) => (),
+                                    }
+
                                     println!("\n");
                                     // ============ DEBUG ============
                                 }
@@ -343,7 +360,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                 Err(e) => (),
                             }
                         }
-                        time::sleep(time::Duration::from_secs(1)).await;
+                        time::sleep(time::Duration::from_secs(3)).await;
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
