@@ -45,7 +45,23 @@ As the current leader keeper, it will do the following jobs.
 
 First, it syncs the clock value of all backends as it did in lab2. It retrieves the clock value from all backends and send the maximum one back to each backend.
 
-Second, it does data migration when a backend join or leave the view.
+Second, it does data migration when a backend joins or leaves the view. Details are following.
+
+#### Primary Keeper
+Once a keeper runs as a primary, it first scans every backend and stores their status into a local table. The table contains one entry for one backend, and each entry stores backend’s address and status (up or down): `{ addr: String, status: bool }`.
+
+Second, from this table, try to find a previous one by the hash value computed from backend storage. If an old version does exist, replace the local one with the previous version. If not, store the local table into backend storage.
+
+Third, it continues to scan all backends,  and compares each status to the local stored table to be notified of node joining or node leaving, then performs data migration based on whether a node joins or leaves. Store updated status table into storage after this has been done.
+
+Sleep for 3 seconds and then continue scanning backend servers.
+
+This method naturally solves the problem of data migration being interruptted. If a keeper crashes during data migration, the table won’s be updated. Once the next keeper is up, it fetches the previous table and scans backends. It will figure out whether a node has joined or leaved, and will do data migration once again if needed. Therefore, data migration are ensured to be done.
+
+#### Find Storage
+
+As mentioned before, the keeper has a local storage table maintaining status for all backens. Each time it needs to fetch or store something, it calculates the hash value and corresponding backend. If the backend happens to be down, simple do linear search to find the next available backend, which is supposed to store the data you need. Same thing for finding replica: do linear search to find the next live backend after primary backup.
+
 
 #### Data Migration
 
