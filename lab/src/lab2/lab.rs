@@ -79,7 +79,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 let serialized_table = serde_json::to_string(&status_table).unwrap();
                 let x = write_twice(serialized_table, status_storage_index, &status_table).await;
             } else {
-                println!("SHOULD NOT APPEAR");
+                // println!("SHOULD NOT APPEAR");
             }
         }
     }
@@ -129,8 +129,8 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             // println!("{} sets the index is {}", kc_addr_http, kc.this);
                         },
                         Err(e) => {
-                            println!("{} set index goes wrong", kc_addr_http);
-                            println!("{:?}", e);
+                            // println!("{} set index goes wrong", kc_addr_http);
+                            // println!("{:?}", e);
                         },
                     };
                 }
@@ -181,7 +181,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 // if this keeper is not the leader,
                 // block it in a hear_beat
                 if leader_id != (kc.this as i64) {
-                    println!("the {} keep client is not the leader", kc_addr_http);
+                    // println!("the {} keep client is not the leader", kc_addr_http);
                     // start heartbeat
                     let mut primary_alive = true;
                     while primary_alive {
@@ -218,25 +218,41 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                             clocks.push(v0.into_inner().timestamp);
                                         }
                                         Err(e) => {
-                                            return Box::new(TribblerError::Unknown(e.to_string()));
+                                            // return Box::new(TribblerError::Unknown(e.to_string()));
                                         }
                                     }
                                     // newly joined node
                                     if !status_table[i].status {
                                         match node_join(i, &status_table).await {
-                                            Ok(_) => {println!("Node {} join succeeded", i);},
-                                            Err(_) => {println!("Node {} join failed", i);},
+                                            Ok(_) => {},
+                                            Err(_) => {},
                                         }
                                         status_table[i].status = true;
                                     }
                                     // ============ DEBUG ============
-                                    println!("***************** backend {} ***************** ", i);
-                                    match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                    // println!("***************** backend {} ***************** ", i);
+                                    // match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                    //     Ok(keys) => {
+                                    //         for k in keys.into_inner().list {
+                                    //             match c.get(Key{ key: k.to_string()}).await {
+                                    //                 Ok(vv) => {
+                                    //                     println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
+                                    //                 }
+                                    //                 Err(e) => (),
+                                    //             }
+                                    //         }
+                                    //     },
+                                    //     Err(_) => (),
+                                    // }
+                                    match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
                                         Ok(keys) => {
                                             for k in keys.into_inner().list {
-                                                match c.get(Key{ key: k.to_string()}).await {
+                                                match c.list_get(Key{ key: k.to_string()}).await {
                                                     Ok(vv) => {
-                                                        println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
+                                                        println!("key: {}, list:", k.to_string());
+                                                        for vvv in vv.into_inner().list {
+                                                            println!("{}", vvv);
+                                                        }
                                                     }
                                                     Err(e) => (),
                                                 }
@@ -262,18 +278,19 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                     }
 
                                     println!("\n");
+
                                     // ============ DEBUG ============
                                 }
                                 Err(e) => {
                                     // node leaves
                                     if status_table[i].status {
                                         match node_leave(i, &status_table).await {
-                                            Ok(_) => {println!("Node {} leave succeeded", i);},
-                                            Err(_) => {println!("Node {} leave failed", i);},
+                                            Ok(_) => {},
+                                            Err(_) => {},
                                         }
                                         status_table[i].status = false;
                                     }
-                                    println!("Connect to backend {} failed", i);
+                                    // println!("Connect to backend {} failed", i);
                                     // return Box::new(TribblerError::Unknown(e.to_string()));
                                 }
                             }
@@ -292,6 +309,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             }
                         }
                         time::sleep(time::Duration::from_secs(3)).await;
+
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************

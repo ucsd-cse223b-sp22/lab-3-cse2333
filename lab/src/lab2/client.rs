@@ -28,12 +28,12 @@ pub async fn scan_server(backs: Vec<String>) -> Vec<StatusTableEntry> {
                 status_table_multi.push(v);
             }
             Err(e) => {
-                println!("error when unwrap!!!!{}", e);
+                // println!("error when unwrap!!!!{}", e);
             }
         }
     }
     // println!("====muitl-processor===={:?}", status_table_multi);
-    //println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
+    // println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
     return status_table_multi;
 }
 pub async fn scan_single_server(addr: String) -> StatusTableEntry {
@@ -46,7 +46,7 @@ pub async fn scan_single_server(addr: String) -> StatusTableEntry {
             status: true,
         },
         Err(_) => {
-            println!("some server dies here!!! {}", addr);
+            // println!("some server dies here!!! {}", addr);
             StatusTableEntry {
                 addr: addr.clone(),
                 status: false,
