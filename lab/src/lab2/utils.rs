@@ -121,21 +121,21 @@ pub async fn data_migration(
         if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
             || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
         {
-            // remove old entries
-            let old_records = d
-                .list_get(Key {
-                    key: each_key.to_string(),
-                })
-                .await?
-                .into_inner()
-                .list;
-            for entry in old_records {
-                d.list_remove(KeyValue {
-                    key: each_key.to_string(),
-                    value: entry,
-                })
-                .await?;
-            }
+            // remove old entries (no need to do it now)
+            // let old_records = d
+            //     .list_get(Key {
+            //         key: each_key.to_string(),
+            //     })
+            //     .await?
+            //     .into_inner()
+            //     .list;
+            // for entry in old_records {
+            //     d.list_remove(KeyValue {
+            //         key: each_key.to_string(),
+            //         value: entry,
+            //     })
+            //     .await?;
+            // }
             // append new records
             let records = s
                 .list_get(Key {
