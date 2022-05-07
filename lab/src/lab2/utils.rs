@@ -12,6 +12,48 @@ pub struct StatusTableEntry {
     pub status: bool,
 }
 
+#[allow(unused_variables)]
+pub async fn write_twice(
+    message: String,
+    backend: usize,
+    status_table: &Vec<StatusTableEntry>,
+) -> TribResult<()> {
+    let mut index = backend;
+
+    // write  into promary
+    while !status_table[index].status {
+        index = (index + 1) % status_table.len();
+    }
+    let mut addr_http = "http://".to_string();
+    addr_http.push_str(&status_table[index].addr.clone());
+    let mut client = TribStorageClient::connect(addr_http.to_string()).await?;
+
+    client
+        .set(KeyValue {
+            key: "BackendStatus".to_string(),
+            value: message.to_string(),
+        })
+        .await?;
+
+    // write into replica
+    index = (index + 1) % status_table.len();
+    while !status_table[index].status {
+        index = (index + 1) % status_table.len();
+    }
+    let mut replica_addr_http = "http://".to_string();
+    replica_addr_http.push_str(&status_table[index].addr.clone());
+    let mut replica_client = TribStorageClient::connect(replica_addr_http.to_string()).await?;
+
+    replica_client
+        .set(KeyValue {
+            key: "BackendStatus".to_string(),
+            value: message.to_string(),
+        })
+        .await?;
+
+    Ok(())
+}
+
 // Migrate data from src node to dest node
 // Initial order: start -> dest -> src
 // Range: (start, dest] or (start, src]
@@ -24,6 +66,8 @@ pub async fn data_migration(
     leave: bool,
     status_table: &Vec<StatusTableEntry>,
 ) -> TribResult<()> {
+    println!("DATA MIGRATION INFORMATION");
+    println!("start {}, dst {}, src {}, leave {}", start, dst, src, leave);
     // connect to dest and src
     let mut addr_http = "http://".to_string();
     addr_http.push_str(&status_table[dst].addr);
@@ -77,21 +121,21 @@ pub async fn data_migration(
         if (!leave && ((h <= dst && h > start) || (start > dst && (h > start || h <= dst))))
             || (leave && ((h <= src && h > start) || (start > src && (h > start || h <= src))))
         {
-            // remove old entries
-            let old_records = d
-                .list_get(Key {
-                    key: each_key.to_string(),
-                })
-                .await?
-                .into_inner()
-                .list;
-            for entry in old_records {
-                d.list_remove(KeyValue {
-                    key: each_key.to_string(),
-                    value: entry,
-                })
-                .await?;
-            }
+            // remove old entries (no need to do it now)
+            // let old_records = d
+            //     .list_get(Key {
+            //         key: each_key.to_string(),
+            //     })
+            //     .await?
+            //     .into_inner()
+            //     .list;
+            // for entry in old_records {
+            //     d.list_remove(KeyValue {
+            //         key: each_key.to_string(),
+            //         value: entry,
+            //     })
+            //     .await?;
+            // }
             // append new records
             let records = s
                 .list_get(Key {

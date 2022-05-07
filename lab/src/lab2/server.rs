@@ -128,9 +128,8 @@ impl Server for FrontServer {
         let storage_client = self.bin_storage.bin("Users").await?;
         let k = storage_client.list_get("Users").await?.0;
         let all_users_set: HashSet<String> = HashSet::from_iter(k);
-        let mut all_users_list: Vec<String> = Vec::from_iter(all_users_set);
+        let mut all_users_list = Vec::from_iter(all_users_set);
         all_users_list.sort();
-        println!("{}", all_users_list.len());
         let sorted = all_users_list[..min(MIN_LIST_USER, all_users_list.len())].to_vec();
         Ok(sorted)
     }

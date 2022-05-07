@@ -75,10 +75,9 @@ impl StorageClientWrapper {
         // let time = Instant::now();
         let mut e = self.timestamp.lock().await;
         let elapsed = e.elapsed().as_secs();
-        if elapsed >= 5 {
+        if elapsed >= 3 {
             let table = scan_server(self.backs.clone()).await;
             *e = Instant::now();
-            drop(e);
             let (tmp_addr_primary, tmp_addr_backup) = hash_name_ip(&self.name, table.clone()).await;
             let mut status_table_lock = self.status_table.lock().await;
             *status_table_lock = table;
@@ -86,16 +85,21 @@ impl StorageClientWrapper {
             let mut addr_primary_lock = self.addr_primary.lock().await;
             *addr_primary_lock = tmp_addr_primary;
             drop(addr_primary_lock);
-            let mut addr_backup_lock = self.addr_primary.lock().await;
+            let mut addr_backup_lock = self.addr_backup.lock().await;
             *addr_backup_lock = tmp_addr_backup;
             drop(addr_backup_lock);
         }
+        drop(e);
+        let addr_primary_lock = &self.addr_primary.lock().await;
         let storage_client_primary = StorageClient {
-            addr: (&self.addr_primary.lock().await).to_string(),
+            addr: (*addr_primary_lock).to_string(),
         };
+        drop(addr_primary_lock);
+        let addr_backup_lock = self.addr_backup.lock().await;
         let storage_client_backup = StorageClient {
-            addr: (&self.addr_backup.lock().await).to_string(),
+            addr: (*addr_backup_lock).to_string(),
         };
+        drop(addr_backup_lock);
         (storage_client_primary, storage_client_backup)
     }
 }
@@ -109,8 +113,20 @@ impl KeyString for StorageClientWrapper {
         let mut key_name = escape(self.name.clone()).to_string();
         key_name.push_str(&"::".to_string());
         key_name.push_str(&escape(key));
-        let res1 = storage_client_primary.get(&key_name).await?;
-        let res2 = storage_client_backup.get(&key_name).await?;
+        let res1 = match storage_client_primary.get(&key_name).await {
+            Ok(v) => v,
+            Err(e) => {
+                println!("the primary backend dies in get function, because delayed update of table, may cause data loss!{:?}",e);
+                return storage_client_backup.get(&key_name).await;
+            }
+        };
+        let res2 = match storage_client_backup.get(&key_name).await {
+            Ok(v) => v,
+            Err(e) => {
+                println!("the backup backend dies in get function, because delayed update of table, may cause data loss!{:?}",e);
+                return Ok(res1);
+            }
+        };
         let time1 = storage_client_primary.clock(0).await?;
         let time2 = storage_client_backup.clock(0).await?;
         if time1 > time2 {
@@ -127,18 +143,37 @@ impl KeyString for StorageClientWrapper {
         let mut key_name = escape(self.name.clone()).to_string();
         key_name.push_str(&"::".to_string());
         key_name.push_str(&escape(kv.key.clone()));
-        let res1 = storage_client_primary
+        let res1 = match storage_client_primary
             .set(&KeyValue {
                 key: key_name.to_string(),
                 value: kv.value.to_string(),
             })
-            .await?;
-        let res2 = storage_client_backup
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                println!("the primary backend dies in get function, because delayed update of table, may cause data loss!{:?}",e);
+                return storage_client_backup
+                    .set(&KeyValue {
+                        key: key_name.to_string(),
+                        value: kv.value.to_string(),
+                    })
+                    .await;
+            }
+        };
+        let res2 = match storage_client_backup
             .set(&KeyValue {
                 key: key_name.to_string(),
                 value: kv.value.to_string(),
             })
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                println!("the backup backend dies in get function, because delayed update of table, may cause data loss!{:?}",e);
+                return Ok(res1);
+            }
+        };
         if res1 || res2 {
             // at least one replica??
             Ok(true)
