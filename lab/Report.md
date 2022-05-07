@@ -76,6 +76,3 @@ For node leaving, it is like removing a node from the cycle. This event affects 
 
 ![Untitled](2.jpeg)
 
-Also, data migration is different for key-value pairs and key-list. For operations on lists, remove all the old entries for a specific key and copy entries one by one.
-
-The issue is data consistency. During data migration, keeper may crash. We maintain a global log to record start point and end point for each migration. If a keeper finds there is no end entry matching a previous start entry for migration, it will redo this operation.
