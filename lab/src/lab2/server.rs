@@ -107,8 +107,6 @@ impl Server for FrontServer {
         }
 
         let user_list = storage_client.list_get("Users").await?.0;
-        //todo: if error occurs, call update table and bin, then list_get again!!
-        // let res = self.bin_storage.update_table();
         if user_list.contains(&user.to_string()) {
             return Err(Box::new(TribblerError::UsernameTaken(user.to_string())));
         }
@@ -128,10 +126,12 @@ impl Server for FrontServer {
 
     async fn list_users(&self) -> TribResult<Vec<String>> {
         let storage_client = self.bin_storage.bin("Users").await?;
-        let mut k = storage_client.list_get("Users").await?.0;
-        k.sort();
-        println!("{}", k.len());
-        let sorted = k[..min(MIN_LIST_USER, k.len())].to_vec();
+        let k = storage_client.list_get("Users").await?.0;
+        let all_users_set: HashSet<String> = HashSet::from_iter(k);
+        let mut all_users_list: Vec<String> = Vec::from_iter(all_users_set);
+        all_users_list.sort();
+        println!("{}", all_users_list.len());
+        let sorted = all_users_list[..min(MIN_LIST_USER, all_users_list.len())].to_vec();
         Ok(sorted)
     }
 
