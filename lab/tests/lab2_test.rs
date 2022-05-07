@@ -39,7 +39,6 @@ fn generate_random_string(len: usize) -> String {
     return password;
 }
 
-
 fn kv(key: &str, value: &str) -> KeyValue {
     KeyValue {
         key: key.to_string(),
@@ -54,8 +53,8 @@ fn pat(prefix: &str, suffix: &str) -> Pattern {
     }
 }
 
-async fn setup(backs: Vec<String>, addrs:  Vec<String>) -> TribResult<(MpscSender<()>, MpscSender<()>, MpscSender<()>, MpscSender<()>,
-MpscSender<()>, MpscSender<()>)> {
+async fn setup(backs: Vec<String>, addrs:  Vec<String>) -> TribResult<(MpscSender<()>, 
+ MpscSender<()>, MpscSender<()>, MpscSender<()>, MpscSender<()>, MpscSender<()>)> {
     let (shut_tx1, shut_rx1) = tokio::sync::mpsc::channel(1);
     let (shut_tx2, shut_rx2) = tokio::sync::mpsc::channel(1);
     let (shut_tx3, shut_rx3) = tokio::sync::mpsc::channel(1);
@@ -103,13 +102,100 @@ MpscSender<()>, MpscSender<()>)> {
     spawn_back(cfg1);
     spawn_back(cfg2);
     spawn_back(cfg3);
-    spawn_back(cfg4);
+    // spawn_back(cfg4);
     spawn_back(cfg5);
     spawn_keep(kfg1);
-    tokio::time::sleep(Duration::from_millis(777)).await;
-    Ok((shut_tx1.clone(), shut_tx2.clone(), shut_tx3.clone(), shut_tx4.clone(),
-    shut_tx5.clone(), shut_tx6.clone()))
+    time::sleep(Duration::from_millis(777)).await;
+    Ok((shut_tx1.clone(), shut_tx2.clone(), shut_tx3.clone(), shut_tx4.clone(), shut_tx5.clone(),shut_tx6.clone(), ))
 }
+
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_node_leave() -> TribResult<()> {
+//     let backs = vec![
+//         "127.0.0.1:33950".to_string(),
+//         "127.0.0.1:33951".to_string(),
+//         "127.0.0.1:33952".to_string(),
+//         "127.0.0.1:33953".to_string(),
+//         "127.0.0.1:33954".to_string(),
+//     ];
+//     let addrs = vec![
+//         "127.0.0.1:33955".to_string(),
+//     ];
+
+//     let (tx1, tx2, tx3, tx4, tx5, tx6) = setup(backs.clone(), addrs.clone()).await?;
+//     // let x = setup(backs.clone(), addrs.clone()).await?;
+
+//     let bc = lab2::new_bin_client(backs.clone()).await?;
+//     let backend0 = bc.bin("one").await?;
+//     let backend1 = bc.bin("2222").await?;
+//     let backend2 = bc.bin("thre").await?;
+//     let backend3 = bc.bin("four").await?;
+//     let backend4 = bc.bin("hello").await?;
+    
+//     backend0.set(&kv("one", "one")).await?;
+//     backend1.set(&kv("2222", "2222")).await?;
+//     backend2.set(&kv("thre", "thre")).await?;
+//     backend3.set(&kv("four", "four")).await?;
+//     backend4.set(&kv("hello", "hello")).await?;
+//     time::sleep(time::Duration::from_secs(2)).await;
+//     let _ = tx2.send(()).await; // shutdown backend 0
+
+//     time::sleep(time::Duration::from_secs(20)).await;
+
+//     Ok(())
+// }
+
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_node_join() -> TribResult<()> {
+//     let backs = vec![
+//         "127.0.0.1:33950".to_string(),
+//         "127.0.0.1:33951".to_string(),
+//         "127.0.0.1:33952".to_string(),
+//         "127.0.0.1:33953".to_string(),
+//         "127.0.0.1:33954".to_string(),
+//     ];
+//     let addrs = vec![
+//         "127.0.0.1:33955".to_string(),
+//     ];
+
+//     let (tx1, tx2, tx3, tx4, tx5, tx6) = setup(backs.clone(), addrs.clone()).await?;
+//     // let x = setup(backs.clone(), addrs.clone()).await?;
+
+//     let bc = lab2::new_bin_client(backs.clone()).await?;
+//     let backend0 = bc.bin("one").await?;
+//     let backend1 = bc.bin("2222").await?;
+//     let backend2 = bc.bin("thre").await?;
+//     let backend3 = bc.bin("four").await?;
+//     let backend4 = bc.bin("hello").await?;
+    
+//     backend0.set(&kv("one", "one")).await?;
+//     backend1.set(&kv("2222", "2222")).await?;
+//     backend2.set(&kv("thre", "thre")).await?;
+//     backend3.set(&kv("four", "four")).await?;
+//     backend4.set(&kv("hello", "hello")).await?;
+//     time::sleep(time::Duration::from_secs(2)).await;
+    
+//     time::sleep(time::Duration::from_secs(2)).await;
+//     // let _ = tx2.send(()).await; // shutdown backend 0
+
+//     // time::sleep(time::Duration::from_secs(20)).await;
+//     // let (shut_tx4, shut_rx4) = tokio::sync::mpsc::channel(1);
+//     // let cfg44 = BackConfig {
+//     //     addr: backs[3].to_string(),
+//     //     storage: Box::new(MemStorage::default()),
+//     //     ready: None,
+//     //     shutdown: Some(shut_rx4),
+//     // };
+//     // println!("try to start back 3");
+//     // let x = spawn_back(cfg44);
+
+
+
+//     time::sleep(time::Duration::from_secs(10)).await;
+
+//     Ok(())
+// }
+
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_follow() -> TribResult<()> {
@@ -122,6 +208,8 @@ async fn test_simple_follow() -> TribResult<()> {
     ];
     let addrs = vec![
         "127.0.0.1:33955".to_string(),
+        "127.0.0.1:33956".to_string(),
+        "127.0.0.1:33957".to_string(),
     ];
     let (tx1, tx2, tx3, tx4,
         tx5, tx6, ) = setup(backs.clone(), addrs.clone()).await?;
@@ -129,13 +217,13 @@ async fn test_simple_follow() -> TribResult<()> {
     let bc = lab2::new_bin_client(backs.clone()).await?;
     let client0 = bc.bin("one").await?;
     let client1 = bc.bin("2222").await?;
-    let client2 = bc.bin("thre").await?;
+    let client2 = bc.bin("three").await?;
     let client3 = bc.bin("four").await?;
     let client4 = bc.bin("hello").await?;
     
     client0.set(&kv("one", "one")).await?;
     client1.set(&kv("2222", "2222")).await?;
-    client2.set(&kv("thre", "thre")).await?;
+    client2.set(&kv("three", "three")).await?;
     client3.set(&kv("four", "four")).await?;
     client3.set(&kv("four1", "1234")).await?;
     client3.set(&kv("pingping", "pangpang")).await?;
@@ -161,5 +249,6 @@ async fn test_simple_follow() -> TribResult<()> {
     let _ = tx6.send(()).await;
     Ok(())
 }
+
 
 // cargo test -p lab --test lab2_test -- --nocapture

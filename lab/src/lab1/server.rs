@@ -114,7 +114,7 @@ impl TribStorage for StorageServer {
     }
 
     async fn clock(&self, request: Request<Clock>) -> Result<Response<Clock>, Status> {
-        // println!("-- clock funtion-- Received request from: {:?}", request);
+        // //println!("-- clock funtion-- Received request from: {:?}", request);
         let result = self.storage.clock(request.into_inner().timestamp).await;
         match result {
             Ok(value) => Ok(Response::new(Clock { timestamp: value })),

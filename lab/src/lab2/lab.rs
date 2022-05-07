@@ -201,7 +201,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                 } else {
                     // println!("the {} keep client is the leader", kc_addr_http);
                     loop{
-                        // println!(" {} starts do its work", kc_addr_http);
+                        //println!(" {} starts do its work", kc_addr_http);
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
@@ -244,42 +244,41 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                     //     },
                                     //     Err(_) => (),
                                     // }
-                                    match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
-                                        Ok(keys) => {
-                                            for k in keys.into_inner().list {
-                                                match c.list_get(Key{ key: k.to_string()}).await {
-                                                    Ok(vv) => {
-                                                        println!("key: {}, list:", k.to_string());
-                                                        for vvv in vv.into_inner().list {
-                                                            println!("{}", vvv);
-                                                        }
-                                                    }
-                                                    Err(e) => (),
-                                                }
-                                            }
-                                        },
-                                        Err(_) => (),
-                                    }
-                                    match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
-                                        Ok(keys) => {
-                                            for k in keys.into_inner().list {
-                                                match c.list_get(Key{ key: k.to_string()}).await {
-                                                    Ok(vv) => {
-                                                        println!("key: {}, list:", k.to_string());
-                                                        for vvv in vv.into_inner().list {
-                                                            println!("{}", vvv);
-                                                        }
-                                                    }
-                                                    Err(e) => (),
-                                                }
-                                            }
-                                        },
-                                        Err(_) => (),
-                                    }
+                                    // match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                    //     Ok(keys) => {
+                                    //         for k in keys.into_inner().list {
+                                    //             match c.list_get(Key{ key: k.to_string()}).await {
+                                    //                 Ok(vv) => {
+                                    //                     println!("key: {}, list:", k.to_string());
+                                    //                     for vvv in vv.into_inner().list {
+                                    //                         println!("{}", vvv);
+                                    //                     }
+                                    //                 }
+                                    //                 Err(e) => (),
+                                    //             }
+                                    //         }
+                                    //     },
+                                    //     Err(_) => (),
+                                    // }
+                                    // match c.list_keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                    //     Ok(keys) => {
+                                    //         for k in keys.into_inner().list {
+                                    //             match c.list_get(Key{ key: k.to_string()}).await {
+                                    //                 Ok(vv) => {
+                                    //                     println!("key: {}, list:", k.to_string());
+                                    //                     for vvv in vv.into_inner().list {
+                                    //                         println!("{}", vvv);
+                                    //                     }
+                                    //                 }
+                                    //                 Err(e) => (),
+                                    //             }
+                                    //         }
+                                    //     },
+                                    //     Err(_) => (),
+                                    // }
 
-                                    println!("\n");
-
-                                    // ============ DEBUG ============
+                                    // println!("\n");
+                                    // // ============ DEBUG ============
                                 }
                                 Err(e) => {
                                     // node leaves

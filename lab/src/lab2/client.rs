@@ -45,13 +45,10 @@ pub async fn scan_single_server(addr: String) -> StatusTableEntry {
             addr: addr.clone(),
             status: true,
         },
-        Err(_) => {
-            // println!("some server dies here!!! {}", addr);
-            StatusTableEntry {
-                addr: addr.clone(),
-                status: false,
-            }
-        }
+        Err(_) => StatusTableEntry {
+            addr: addr.clone(),
+            status: false,
+        },
     }
 }
 pub async fn hash_name_ip(name: &str, table: Vec<StatusTableEntry>) -> (String, String) {
