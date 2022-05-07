@@ -153,7 +153,6 @@ pub async fn data_migration(
             }
         }
     }
-
     Ok(())
 }
 

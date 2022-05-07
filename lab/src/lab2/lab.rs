@@ -92,7 +92,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
     let mut clock: u64 = 0;
     select! {
         _ =  async {
-            println!("the {} keep server starts", kc_addr_http);
+            // println!("the {} keep server starts", kc_addr_http);
             // the server thread
                 // let server starts to work
                 let server = KeeperServer {
@@ -204,9 +204,9 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                         }
                     }
                 } else {
-                    println!("the {} keep client is the leader", kc_addr_http);
+                    // println!("the {} keep client is the leader", kc_addr_http);
                     loop{
-                        println!(" {} starts do its work", kc_addr_http);
+                        // println!(" {} starts do its work", kc_addr_http);
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
@@ -234,23 +234,23 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                         }
                                         status_table[i].status = true;
                                     }
-                                    // ============ DEBUG ============
-                                    println!("***************** backend {} ***************** ", i);
-                                    match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
-                                        Ok(keys) => {
-                                            for k in keys.into_inner().list {
-                                                match c.get(Key{ key: k.to_string()}).await {
-                                                    Ok(vv) => {
-                                                        println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
-                                                    }
-                                                    Err(e) => (),
-                                                }
-                                            }
-                                        },
-                                        Err(_) => (),
-                                    }
-                                    println!("\n");
-                                    // ============ DEBUG ============
+                                    // // ============ DEBUG ============
+                                    // println!("***************** backend {} ***************** ", i);
+                                    // match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                    //     Ok(keys) => {
+                                    //         for k in keys.into_inner().list {
+                                    //             match c.get(Key{ key: k.to_string()}).await {
+                                    //                 Ok(vv) => {
+                                    //                     println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
+                                    //                 }
+                                    //                 Err(e) => (),
+                                    //             }
+                                    //         }
+                                    //     },
+                                    //     Err(_) => (),
+                                    // }
+                                    // println!("\n");
+                                    // // ============ DEBUG ============
                                 }
                                 Err(e) => {
                                     // node leaves
@@ -280,6 +280,7 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                             }
                         }
                         time::sleep(time::Duration::from_secs(4)).await;
+
                         // **********************************************************************
                         // **********************************************************************
                         // **********************************************************************
