@@ -30,7 +30,6 @@ pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage
     Ok(Box::new(BinStorageClient { backs }))
 }
 
-// TODO: migration interrupt, keeper redo log
 /// this async function accepts a [KeeperConfig] that should be used to start
 /// a new keeper server on the address given in the config.
 ///
@@ -230,23 +229,23 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TribResult<()> {
                                         }
                                         status_table[i].status = true;
                                     }
-                                    // // ============ DEBUG ============
-                                    // println!("***************** backend {} ***************** ", i);
-                                    // match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
-                                    //     Ok(keys) => {
-                                    //         for k in keys.into_inner().list {
-                                    //             match c.get(Key{ key: k.to_string()}).await {
-                                    //                 Ok(vv) => {
-                                    //                     println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
-                                    //                 }
-                                    //                 Err(e) => (),
-                                    //             }
-                                    //         }
-                                    //     },
-                                    //     Err(_) => (),
-                                    // }
-                                    // println!("\n");
-                                    // // ============ DEBUG ============
+                                    // ============ DEBUG ============
+                                    println!("***************** backend {} ***************** ", i);
+                                    match c.keys(Pattern {prefix:"".to_string(), suffix:"".to_string()}).await {
+                                        Ok(keys) => {
+                                            for k in keys.into_inner().list {
+                                                match c.get(Key{ key: k.to_string()}).await {
+                                                    Ok(vv) => {
+                                                        println!("key: {}, value: {}", k.to_string(), vv.into_inner().value);
+                                                    }
+                                                    Err(e) => (),
+                                                }
+                                            }
+                                        },
+                                        Err(_) => (),
+                                    }
+                                    println!("\n");
+                                    // ============ DEBUG ============
                                 }
                                 Err(e) => {
                                     // node leaves

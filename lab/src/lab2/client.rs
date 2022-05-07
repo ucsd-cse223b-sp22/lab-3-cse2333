@@ -15,18 +15,25 @@ use tribbler::storage::{BinStorage, Storage};
 pub async fn scan_server(backs: Vec<String>) -> Vec<StatusTableEntry> {
     // scan all servers and establish the table
     // multi-processor
-    // let timer2 = Instant::now();
+    let timer2 = Instant::now();
     let mut handles = Vec::with_capacity(backs.len());
     let mut status_table_multi: Vec<StatusTableEntry> = Vec::new();
     for i in backs.iter() {
         handles.push(tokio::spawn(scan_single_server(i.to_string())));
     }
     for handle in handles {
-        let entry = handle.await.unwrap();
-        status_table_multi.push(entry);
+        let entry = handle.await;
+        match entry {
+            Ok(v) => {
+                status_table_multi.push(v);
+            }
+            Err(e) => {
+                println!("error when unwrap!!!!{}", e);
+            }
+        }
     }
     // println!("====muitl-processor===={:?}", status_table_multi);
-    // println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
+    println!("multi process timing:{:?} ms", timer2.elapsed().as_millis());
     return status_table_multi;
 }
 pub async fn scan_single_server(addr: String) -> StatusTableEntry {
@@ -38,10 +45,13 @@ pub async fn scan_single_server(addr: String) -> StatusTableEntry {
             addr: addr.clone(),
             status: true,
         },
-        Err(_) => StatusTableEntry {
-            addr: addr.clone(),
-            status: false,
-        },
+        Err(_) => {
+            println!("some server dies here!!! {}", addr);
+            StatusTableEntry {
+                addr: addr.clone(),
+                status: false,
+            }
+        }
     }
 }
 pub async fn hash_name_ip(name: &str, table: Vec<StatusTableEntry>) -> (String, String) {
@@ -56,7 +66,7 @@ pub async fn hash_name_ip(name: &str, table: Vec<StatusTableEntry>) -> (String, 
     let mut curridx = index;
     while cnt < 2 {
         if table[curridx].status == true {
-            if cnt < 1 {
+            if cnt == 0 {
                 tmp_addr_primary.push_str(&table[curridx].addr);
             } else {
                 tmp_addr_backup.push_str(&table[curridx].addr);

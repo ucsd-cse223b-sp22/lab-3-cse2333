@@ -78,7 +78,6 @@ impl StorageClientWrapper {
         if elapsed >= 5 {
             let table = scan_server(self.backs.clone()).await;
             *e = Instant::now();
-            drop(e);
             let (tmp_addr_primary, tmp_addr_backup) = hash_name_ip(&self.name, table.clone()).await;
             let mut status_table_lock = self.status_table.lock().await;
             *status_table_lock = table;
@@ -86,16 +85,21 @@ impl StorageClientWrapper {
             let mut addr_primary_lock = self.addr_primary.lock().await;
             *addr_primary_lock = tmp_addr_primary;
             drop(addr_primary_lock);
-            let mut addr_backup_lock = self.addr_primary.lock().await;
+            let mut addr_backup_lock = self.addr_backup.lock().await;
             *addr_backup_lock = tmp_addr_backup;
             drop(addr_backup_lock);
         }
+        drop(e);
+        let addr_primary_lock = &self.addr_primary.lock().await;
         let storage_client_primary = StorageClient {
-            addr: (&self.addr_primary.lock().await).to_string(),
+            addr: (*addr_primary_lock).to_string(),
         };
+        drop(addr_primary_lock);
+        let addr_backup_lock = self.addr_backup.lock().await;
         let storage_client_backup = StorageClient {
-            addr: (&self.addr_backup.lock().await).to_string(),
+            addr: (*addr_backup_lock).to_string(),
         };
+        drop(addr_backup_lock);
         (storage_client_primary, storage_client_backup)
     }
 }
