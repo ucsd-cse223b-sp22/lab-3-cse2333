@@ -27,11 +27,7 @@ use tribbler::storage::MemStorage;
 /// underlying storage system.
 #[allow(unused_variables)]
 pub async fn new_bin_client(backs: Vec<String>) -> TribResult<Box<dyn BinStorage>> {
-    let table = scan_server(backs.clone()).await;
-    Ok(Box::new(BinStorageClient {
-        backs,
-        status_table: table,
-    }))
+    Ok(Box::new(BinStorageClient { backs }))
 }
 
 // TODO: migration interrupt, keeper redo log
