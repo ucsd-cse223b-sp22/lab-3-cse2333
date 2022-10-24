@@ -126,10 +126,11 @@ impl Server for FrontServer {
 
     async fn list_users(&self) -> TribResult<Vec<String>> {
         let storage_client = self.bin_storage.bin("Users").await?;
-        let mut k = storage_client.list_get("Users").await?.0;
-        k.sort();
-        println!("{}", k.len());
-        let sorted = k[..min(MIN_LIST_USER, k.len())].to_vec();
+        let k = storage_client.list_get("Users").await?.0;
+        let all_users_set: HashSet<String> = HashSet::from_iter(k);
+        let mut all_users_list = Vec::from_iter(all_users_set);
+        all_users_list.sort();
+        let sorted = all_users_list[..min(MIN_LIST_USER, all_users_list.len())].to_vec();
         Ok(sorted)
     }
 

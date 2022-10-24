@@ -71,16 +71,6 @@ impl TribStorage for StorageServer {
                 value: request_inner.value,
             })
             .await;
-
-        // let result2 = self
-        //     .storage
-        //     .list_keys(&Pattern {
-        //         prefix: "".to_string(),
-        //         suffix: "".to_string(),
-        //     })
-        //     .await;
-        // dbg!(result2);
-
         match result {
             Ok(value) => Ok(Response::new(Bool { value: value })),
             Err(e) => Err(Status::invalid_argument("Server list_append() failed")),
@@ -124,6 +114,7 @@ impl TribStorage for StorageServer {
     }
 
     async fn clock(&self, request: Request<Clock>) -> Result<Response<Clock>, Status> {
+        // //println!("-- clock funtion-- Received request from: {:?}", request);
         let result = self.storage.clock(request.into_inner().timestamp).await;
         match result {
             Ok(value) => Ok(Response::new(Clock { timestamp: value })),
